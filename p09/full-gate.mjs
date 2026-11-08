@@ -145,6 +145,8 @@ try{
   stage('P09_EXTRA_FE_CHECK',fe,['check','p09/fe']);
   stage('P09_EXTRA_FE_TEST',fe,['test','--jobs','1','p09/fe'],{feTests:3});
   stage('P09_POSITIVE_ACCESS',fe,['check','p09/probes/external_positive']);
+  stage('P09_POSITIVE_ACCESS_BUILD',fe,['build','--out-dir','artifacts/p09/positive','p09/probes/external_positive']);
+  stage('P09_POSITIVE_ACCESS_EVM','node',['--test','p09/tests/access-positive.test.mjs'],{tests:1});
   stage('P09_ENGINEERING_REGRESSIONS','node',['--test','p09/tests/engineering.test.mjs'],{tests:27});
   stage('P09_EXTRA_MUTANTS_PREP',py,['p09/mutations.py']);
   const extra=JSON.parse(readFileSync(resolve(root,'results/p09/extra-mutants.json'),'utf8'));

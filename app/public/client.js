@@ -817,7 +817,7 @@ function incidentShow(data) {
   selectedIncidentStrategy=null;
   const eligible=data.options.filter(o=>o.status==='ready');
   $('#incidentStatus').className=`status ${(eligible.length||data.status==='already_contained')?'good':data.options.some(o=>o.status==='unauthorized')?'loading':'bad'}`;
-  $('#incidentStatus').textContent=({assessed:'FE OPTIONS VERIFIED',requires_guardian:'GUARDIAN ACTIVATION REQUIRED',infeasible:'NO VERIFIED RESPONSE',already_contained:'ALREADY CONTAINED',unreachable:'OBJECTIVE UNREACHABLE'})[data.status]||data.status.toUpperCase();
+  $('#incidentStatus').textContent=({assessed:'FE OPTIONS VERIFIED',requires_guardian:'GUARDIAN ACTIVATION REQUIRED',infeasible:'NO VERIFIED RESPONSE',already_contained:'ALREADY CONTAINED',unreachable:'OUTSIDE SUPPORTED STRATEGIES'})[data.status]||data.status.toUpperCase();
   $('#incidentSummary').textContent=data.reason;
   const holder=$('#incidentOptions');holder.replaceChildren();
   if(!data.options.length) makeText(holder,'div',data.reason,'planner-empty');

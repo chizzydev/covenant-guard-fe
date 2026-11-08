@@ -92,7 +92,9 @@ for(const mode of ['flagship','legacy'])for(const name of ['direct','actions','m
       const history=(await s.req('/api/history')).data.history;assert.equal(history.length,prior.length+1);
       assert.equal(history.filter(x=>x.txHash===response.data.result.transactionHash).length,1);
       await s.req('/api/audit/reconcile',{});assert.equal((await s.req('/api/history')).data.history.length,history.length);
-      save('audit-'+mode+'-'+name,{response,blocked,recovered,history});
+      const exportPath=resolve(output,'export-'+mode+'-'+name+'.json');writeFileSync(exportPath,JSON.stringify((await s.req('/api/history/export')).data));
+      const verified=spawnSync(process.execPath,['p09/verify-journal.mjs',exportPath],{cwd:root,encoding:'utf8'});assert.equal(verified.status,0,verified.stderr);
+      save('audit-'+mode+'-'+name,{response,blocked,recovered,history,exportVerification:verified.stdout});
     }finally{await s.stop()}
   });
 }
