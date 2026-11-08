@@ -107,6 +107,8 @@ export async function createFlagshipRuntime() {
       current.incident.reserveMinimum===String(incident.reserve);
     return {mask,operationError,incidentMask,goalMatches,authorized,
       active,matchesStoredObjective:matches,
+      fullyContained:incidentMask===0,
+      validProgress:active&&matches&&mask===0&&operationError===0&&goalMatches,
       eligible:active&&matches&&mask===0&&operationError===0&&incidentMask===0&&goalMatches&&authorized,
       role,final:{a:String(d[4]),b:String(d[5]),c:String(d[6])},
       from:'Fe previewIncidentActions() EVM static call; stored incident checked by Fe'};

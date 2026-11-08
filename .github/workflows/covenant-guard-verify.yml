@@ -22,28 +22,23 @@ jobs:
       P08_LINUX_FE_SHA256: "3732fbe8a6e9d2ea3925d02d0e3a1478bc1e01d742c2be75d3ea7300c46c45f0"
     steps:
       - name: Checkout the exact commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1; node24
         with:
           persist-credentials: false
 
       - name: Node 24 with npm lockfile cache
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0; node24
         with:
           node-version: "24"
           cache: npm
 
       - name: Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0; node24
         with:
           python-version: "3.12"
 
-      - name: Preflight immutable release inventory
-        shell: bash
-        run: |
-          node p08/ci-source-inventory.mjs
-          node scripts/p06_verify.mjs
-          node scripts/p06_r4_verify.mjs
-          node p07/verify-source.mjs
+      - name: Verify corrected source inventory
+        run: node p08/ci-source-inventory.mjs
 
       - name: Install exact tagged Fe release and enforce approved binary hash
         shell: bash
@@ -54,45 +49,22 @@ jobs:
           "$HOME/.fe/bin/fe" --version | grep -F 'fe 26.5.0 (3dab95f)'
           echo "$HOME/.fe/bin" >> "$GITHUB_PATH"
 
-      - name: Full P08-R4 independent Fe/EVM/Oracle/mutation verification
+      - name: Full corrected P09 qualification
         shell: bash
         run: |
-          export P08_FE_EXE="$HOME/.fe/bin/fe"
-          bash RUN_P08_UBUNTU.sh
+          export P09_FE_EXE="$HOME/.fe/bin/fe"
+          bash RUN_P09_UBUNTU.sh
 
-      - name: Require all security and reproducibility gate markers
-        shell: bash
-        run: |
-          set -euo pipefail
-          LOG="results/p08/P08_LINUX_RUN_LOG.txt"
-          test -s "$LOG"
-          for marker in \
-            'P08_LINUX_FE_BINARY_PIN=PASS' \
-            'P08_FE_98_TESTS=PASS' \
-            'P08_NODE_45_TESTS=PASS' \
-            'P08_EVM_DIFFERENTIAL=PASS' \
-            'P08_MUTANTS_EVM=PASS' \
-            'P08_JUDGE_WITNESS_4_ACCEPT_2_REJECT=PASS' \
-            'P08_REPRODUCIBILITY_PROVENANCE=PASS' \
-            'P08_LINUX_FULL_FE_EVM_ORACLE_AND_MUTANTS=PASS' \
-            'P08_LINUX_R4_GATE=PASS' \
-            'P08_LINUX_PIN_LOCK_COMPLETE=true'; do
-            grep -Fxq "$marker" "$LOG" || { echo "MISSING_REQUIRED_MARKER=$marker"; exit 1; }
-          done
-          test -s results/p07/P07_RUN_MANIFEST.json
-          test -s results/p08/JUDGE_WITNESS.json
-          test -s results/p08/P08_REPRODUCIBILITY_RECEIPT.json
-          echo "P08_PUBLIC_GITHUB_CI_GATE=PASS"
-
-      - name: Preserve independently generated proof receipts
+      - name: Preserve generated qualification evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2; node24
         with:
-          name: covenant-guard-p08-ubuntu-${{ github.run_id }}
+          name: covenant-guard-p09-${{ github.run_id }}
           path: |
             results/P06_RUN_LOG.txt
             results/p07/*.json
             results/p08/*.json
-            results/p08/P08_LINUX_RUN_LOG.txt
-          if-no-files-found: warn
+            results/p09/*.json
+            results/p09/*.txt
+          if-no-files-found: error
           retention-days: 14

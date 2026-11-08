@@ -1,0 +1,6 @@
+[ingot]
+name = "p09_feasibility"
+version = "0.1.0"
+
+[dependencies]
+covenant_transition = { path = "../../library/covenant_transition" }

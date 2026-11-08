@@ -1,0 +1,7 @@
+{
+  "release": "v26.5.0",
+  "source": "https://api.github.com/repos/argotorg/fe/releases/tags/v26.5.0",
+  "assetUrl": "https://github.com/argotorg/fe/releases/download/v26.5.0/fe_linux_amd64",
+  "approvedLinuxSha256": "3732fbe8a6e9d2ea3925d02d0e3a1478bc1e01d742c2be75d3ea7300c46c45f0",
+  "verification": "GitHub release asset digest matches the independently approved P08 fingerprint. Downloaded shell execution eliminated; binary verified before first execution."
+}

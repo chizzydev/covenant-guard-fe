@@ -84,7 +84,8 @@ async function operation(path,payload,resultEl='incidentResult') {
   try {
     const response=await api(path,payload);
     dump(response);
-    show(resultEl, response.result.success ?
+    show(resultEl, response.outcome==='committed_audit_degraded' ?
+      `COMMITTED, AUDIT DEGRADED - do not retry; revision ${response.after.version}` : response.result.success ?
       `COMMITTED · ${response.result.method} · gas ${response.result.gasSpent} · revision ${response.after.version}`:
       `REJECTED BY EVM · ${response.result.method} · state unchanged · ${response.result.error}`,
       response.result.success?'ok':'fail');

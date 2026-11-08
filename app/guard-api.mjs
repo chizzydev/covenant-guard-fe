@@ -1,7 +1,7 @@
 // Additive P06 local endpoints, operating on real P05 Fe Guard3 contracts.
 // Both contracts are compiled Fe EVM bytecode. The API never authoritatively
 // evaluates policy masks, incident deficits, or recoverability in JavaScript.
-export function createGuardApi({runtime,audit,serialized,reply,jsonBody,parseUInt,host,port}) {
+export function createGuardApi({runtime,audit,serialized,serializedMutation,reply,jsonBody,parseUInt,host,port}) {
   function domainOf(value) {
     if (value !== 'allocation' && value !== 'governance') throw Error('GUARD_INVALID_DOMAIN');
     return value;
@@ -22,7 +22,7 @@ export function createGuardApi({runtime,audit,serialized,reply,jsonBody,parseUIn
   }
   async function transact(res,data,op) {
     const domain=domainOf(data.domain),role=roleOf(data.role);
-    return serialized(async()=>{
+    return serializedMutation(async()=>{
       const before=await runtime.state(domain);
       const tx=await op({domain,role});
       const after=await runtime.state(domain);
@@ -35,7 +35,7 @@ export function createGuardApi({runtime,audit,serialized,reply,jsonBody,parseUIn
       const entry=audit.append({
         kind:'transaction',operation:`guard_${tx.method}`,domain,role,
         outcome:tx.success?'committed':'rejected', sender:tx.sender,
-        txHash:tx.transactionHash,gasSpent:tx.gasSpent,evmException:tx.error,
+        receipt:tx,txHash:tx.transactionHash,gasSpent:tx.gasSpent,evmException:tx.error,
         before:protection(before),after:protection(after),
         rejectionCategory:tx.success?null:'EVM_REVERT',
       });

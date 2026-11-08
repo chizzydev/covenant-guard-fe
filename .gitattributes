@@ -1,5 +1,5 @@
 # Preserve byte-for-byte LF source identity across Windows, Linux and CI.
-* text=auto
+* text=auto eol=lf
 *.fe text eol=lf
 *.mjs text eol=lf
 *.js text eol=lf

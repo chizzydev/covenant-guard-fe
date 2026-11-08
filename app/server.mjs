@@ -33,6 +33,12 @@ function serialized(work) {
 }
 
 function reply(res, status, payload) {
+  const health=audit.status();
+  payload={...payload,audit:health};
+  if(payload.result && health.health==='degraded') {
+    payload.outcome=payload.result.success?'committed_audit_degraded':'rejected_audit_degraded';
+    payload.retrySafe=false;payload.recoveryRequired=true;
+  }
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
   res.end(JSON.stringify(payload));
 }
@@ -54,8 +60,10 @@ function parseUInt(value, name) {
   return BigInt(value);
 }
 
+function serializedMutation(work) { return serialized(()=>audit.runMutation(work)); }
+
 const guardApi = createGuardApi({
-  runtime:guardRuntime,audit,serialized,reply,jsonBody,parseUInt,host,port,
+  runtime:guardRuntime,audit,serialized,serializedMutation,reply,jsonBody,parseUInt,host,port,
 });
 
 function parseProposal(data) {
@@ -182,12 +190,16 @@ async function api(req, res, pathname) {
     });
     return res.end(JSON.stringify(payload, null, 2));
   }
+  if(req.method==='GET' && pathname==='/api/audit/status')return reply(res,200,{audit:audit.status()});
   if (req.method !== 'POST') return reply(res, 405, { error: 'POST required' });
   const origin = req.headers.origin;
   if (origin && origin !== `http://${host}:${port}` && origin !== `http://localhost:${port}`) {
     return reply(res, 403, { error: 'Cross-origin modification blocked' });
   }
   const data = await jsonBody(req);
+  if(pathname==='/api/audit/reconcile')return serialized(async()=>reply(res,200,{
+    recovery:audit.reconcile({acknowledgeUnknownSession:data.acknowledgeUnknownSession??null})}));
+
   if (pathname === '/api/preview') {
     const p = parseProposal(data);
     return serialized(async () => reply(res, 200, { preview: await runtime.preview({ ...p, role: roleOf(data) }) }));
@@ -206,7 +218,7 @@ async function api(req, res, pathname) {
   if(pathname === '/api/planner/commit') {
     const p=selectedPlan(data);
     if(!/^[0-9a-f]{64}$/.test(String(data.digest))) throw Error('Invalid plan fingerprint');
-    return serialized(async () => {
+    return serializedMutation(async () => {
       const before=await runtime.snapshot();
       if(before.version!==p.expectedVersion) return reply(res,409,{error:'The configuration changed. Replan from the latest state; no transaction was submitted.'});
       const plan=await planFromFe({state:before,goal:p.goal,role:p.role,previewActions:runtime.previewActions});
@@ -230,7 +242,7 @@ async function api(req, res, pathname) {
       }
       const entry=audit.append({
         kind:'transaction',operation:'planner',outcome:tx.success?'committed':'rejected',
-        role:p.role,sender:tx.sender,txHash:tx.transactionHash,nonce:tx.nonce,
+        role:p.role,sender:tx.sender,receipt:tx,txHash:tx.transactionHash,nonce:tx.nonce,
         goal:p.goal,objective:plan.objective,target:plan.target,planFingerprint:plan.digest,
         proposal:{expectedVersion:before.version,steps:plan.steps},
         fePreviewFinal:plan.preview.final,stageMasks:plan.preview.stageMasks,
@@ -273,7 +285,7 @@ async function api(req, res, pathname) {
     if(!['continuity','spread','reserve'].includes(strategy)) throw Error('Unknown response strategy');
     const digest=String(data.digest||'');
     if(!/^[a-f0-9]{64}$/.test(digest)) throw Error('Invalid incident plan fingerprint');
-    return serialized(async()=>{
+    return serializedMutation(async()=>{
       const before=await runtime.snapshot();
       if(before.version!==p.expectedVersion) return reply(res,409,{error:'State changed since assessment. No transaction submitted; reassess this incident.'});
       if (!legacyMode && !matchesStoredIncident(before,p.incident)) {
@@ -309,7 +321,7 @@ async function api(req, res, pathname) {
       }
       const entry=audit.append({
         kind:'transaction',operation:'incident',outcome:tx.success?'committed':'rejected',
-        role:p.role,sender:tx.sender,txHash:tx.transactionHash,nonce:tx.nonce,
+        role:p.role,sender:tx.sender,receipt:tx,txHash:tx.transactionHash,nonce:tx.nonce,
         incident:p.incident,strategy:strategy,objective:`${assessment.reason} / ${selected.title}`,
         target:selected.target,planFingerprint:selected.goalFingerprint,
         incidentFingerprint:selected.digest,
@@ -340,7 +352,7 @@ async function api(req, res, pathname) {
   if (pathname === '/api/actions/commit') {
     const p = parseActions(data);
     const role = roleOf(data);
-    return serialized(async () => {
+    return serializedMutation(async () => {
       const before = await runtime.snapshot();
       const preflight = await runtime.previewActions({...p,role});
       // Always submit the transaction, including invalid proposals, so
@@ -359,7 +371,7 @@ async function api(req, res, pathname) {
       const entry = audit.append({
         kind:'transaction',operation:'actions',
         outcome:result.success?'committed':'rejected',
-        role,sender:result.sender,txHash:result.transactionHash,nonce:result.nonce,
+        role,sender:result.sender,receipt:result,txHash:result.transactionHash,nonce:result.nonce,
         proposal:actionFields(p),fePreviewFinal:preflight.final,
         stageMasks:preflight.stageMasks,operationError:preflight.operationError,
         before:fields(before),after:fields(after),
@@ -384,7 +396,7 @@ async function api(req, res, pathname) {
   if (pathname === '/api/migration/commit') {
     const p = parseMigration(data);
     const role = roleOf(data);
-    return serialized(async () => {
+    return serializedMutation(async () => {
       const before = await runtime.snapshot();
       const preflight = await runtime.previewMigration({...p,role});
       const result = await runtime.transactMigration({...p,role});
@@ -401,7 +413,7 @@ async function api(req, res, pathname) {
       const entry = audit.append({
         kind:'transaction', operation:'migration',
         outcome:result.success?'committed':'rejected',
-        role,sender:result.sender,txHash:result.transactionHash,nonce:result.nonce,
+        role,sender:result.sender,receipt:result,txHash:result.transactionHash,nonce:result.nonce,
         proposal:migrationFields(p),
         fePreviewFinal:preflight.final,
         stageMasks:preflight.stageMasks,
@@ -420,7 +432,7 @@ async function api(req, res, pathname) {
   if (pathname === '/api/commit') {
     const p = parseProposal(data);
     const role = roleOf(data);
-    return serialized(async () => {
+    return serializedMutation(async () => {
       const before = await runtime.snapshot();
       const preflight = await runtime.preview({ ...p, role });
       const result = await runtime.transact({ ...p, role });
@@ -435,7 +447,7 @@ async function api(req, res, pathname) {
       }
       const entry = audit.append({
         kind: 'transaction', operation:'direct', outcome: result.success ? 'committed' : 'rejected',
-        role, sender: result.sender, txHash: result.transactionHash, nonce: result.nonce,
+        role, sender: result.sender, receipt:result,txHash: result.transactionHash, nonce: result.nonce,
         proposal: proposalFields(p), before: fields(before), after: fields(after),
         protectedBefore:protectedFields(before),protectedAfter:protectedFields(after),
         policyMask: preflight.mask, authorized: preflight.authorized,
@@ -476,6 +488,7 @@ createServer(async (req, res) => {
     return res.end(content);
   } catch (err) {
     console.error('[covenant]', err.message);
+    if (!res.headersSent && /AUDIT_/.test(err.message)) return reply(res,503,{error:err.message,outcome:'audit_unresolved',retrySafe:false,recoveryRequired:true});
     if (!res.headersSent) return reply(res, err instanceof SyntaxError || /expected|Content-Type|Request too large|Invalid|Unknown role|demo role|Migration requires|Step [0-9]+|Requested reserve|Affected market|input safety domain|Unknown incident|GUARD_/.test(err.message) ? 400 : 500, { error: err.message });
     res.end();
   }
