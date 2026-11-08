@@ -157,7 +157,7 @@ async function load(loadInputs=true) {
     states=data.states;
     render(loadInputs);
     if (loadInputs) show('previewResult','Fe contract state loaded. You can now preview a change.');
-    dump({source:'Fe EVM static calls',states:data.states, addresses:data.runtime.contracts});
+    dump({...data,source:'Fe EVM static calls'});
   } finally {setBusy(false);}
 }
 async function operation(path,payload,resultEl='incidentResult') {
