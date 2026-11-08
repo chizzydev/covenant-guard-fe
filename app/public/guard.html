@@ -1,58 +1,73 @@
 <!doctype html>
 <html lang="en"><head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0c1220">
-  <title>Covenant Guard · Live Fe safety engine</title>
-  <link rel="stylesheet" href="/guard.css">
-  <script type="module" src="/guard.js" defer></script>
-  <script src="/audit-status.js" defer></script>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b1016"><title>Covenant Guard · Protection workspace</title>
+<link rel="stylesheet" href="/guard.css"><script type="module" src="/guard.js"></script><script src="/audit-status.js" defer></script>
 </head><body>
-  <header class="topline"><a class="back" href="/">← Covenant Control</a><span class="local">● LOCAL EVM · P06</span></header>
-  <div class="shell">
-    <section class="hero"><div><div class="eyebrow">COVENANT GUARD / REUSABLE FE INGOT</div>
-      <h1>Same guard.<br><em>Different risks.</em></h1>
-      <p>Two deployed Fe contracts import the <strong>same private safety kernel</strong>. Activate a persistent obligation, test a prohibited shortcut, then recover without increasing either deficit.</p>
-    </div><div class="hero-proof"><div class="proof-label">ON-CHAIN ENFORCEMENT</div><div class="proof-value">2 domains<br>1 Guard3</div><small>Executed on a disposable EVM. No real money.</small></div></section>
-    <div class="banner"><strong>Demo trust boundary.</strong> The localhost server holds disposable demo signers. Choosing a role here is not real-user authentication. The Fe contracts separately authorize operator and guardian calls. Never use these keys or this interface on a public chain.</div>
-    <nav class="domain-tabs" aria-label="Fe safety domains">
-      <button type="button" class="tab active" data-domain="allocation" aria-pressed="true"><span>01</span> Allocation protection</button>
-      <button type="button" class="tab" data-domain="governance" aria-pressed="false"><span>02</span> Governance controls</button>
-      <button type="button" class="refresh" id="refresh">↻ Refresh Fe state</button>
-    </nav>
-    <div class="stats">
-      <div class="stat"><label>Current revision</label><strong id="revision">—</strong></div>
-      <div class="stat"><label>Incident phase</label><strong id="phase">—</strong></div>
-      <div class="stat"><label>Exposure deficit</label><strong id="exposure">—</strong></div>
-      <div class="stat"><label>Buffer deficit</label><strong id="buffer">—</strong></div>
-    </div>
-    <div class="grid">
-      <section class="panel"><div class="section-top"><span class="num">01</span><div><h2>Guarded state</h2><p id="description">Reading contract configuration…</p></div></div>
-        <div class="address"><span>Contract</span><code id="address">—</code></div>
-        <label class="role-label" for="role">Demo transaction caller</label>
-        <select id="role"><option value="admin">Operator · can edit state</option><option value="guardian">Guardian · incident authority</option><option value="reviewer">Reviewer · no write access</option></select>
+<a class="skip-link" href="#workspace">Skip to workspace</a>
+<aside class="sidebar">
+ <a class="brand" href="/guard.html"><span class="brand-mark" aria-hidden="true">C</span><span>Covenant<small>GUARD WORKSPACE</small></span></a>
+ <div class="nav-label">PROTECTED DOMAINS</div>
+ <nav class="domain-tabs" aria-label="Fe safety domains">
+  <button type="button" class="tab active" data-domain="allocation" aria-pressed="true"><span class="domain-icon" aria-hidden="true">◈</span><span>Allocation<small>Capital protection</small></span><span class="nav-arrow" aria-hidden="true">↗</span></button>
+  <button type="button" class="tab" data-domain="governance" aria-pressed="false"><span class="domain-icon" aria-hidden="true">▥</span><span>Governance<small>Registry controls</small></span><span class="nav-arrow" aria-hidden="true">↗</span></button>
+ </nav>
+ <div class="kernel-note"><span class="small-label">SHARED SAFETY KERNEL</span><code>Guard3</code><p>Two domains. The same private Fe ingot. Policy decisions stay in the contract.</p><span class="kernel-line" aria-hidden="true"><i></i><b></b><i></i></span></div>
+ <nav class="section-nav" aria-label="On this page"><a href="#controls">01 <span>Protected controls</span></a><a href="#incident-controls">02 <span>Incident lifecycle</span></a><a href="#evidence">03 <span>Execution evidence</span></a></nav>
+ <div class="sidebar-bottom"><span class="local">● Local EVM</span><p>Disposable state · Fe 26.5.0</p><a href="/">Open full workspace ↗</a></div>
+</aside>
+<main class="workspace" id="workspace">
+ <header class="topline"><span>Workspace <span class="breadcrumb-slash">/</span> <strong id="domainTitle">Allocation protection</strong></span><a href="#trust-boundary" class="environment">LOCAL DEMO ↗</a></header>
+ <div class="shell">
+  <section class="hero"><div><div class="eyebrow">CONTRACT-ENFORCED PROTECTION</div><h1>State under guard.</h1><p>Inspect the state. Set an obligation. Recover within the rules.</p></div><button type="button" class="refresh" id="refresh">↻ Refresh Fe state</button></section>
+  <section class="health-overview" aria-label="Current protected state">
+   <div class="state-card"><div class="card-kicker"><span class="small-label">CURRENT PROTECTED STATE</span><span class="read-tag">READ FROM FE</span></div><div class="current-values"><div><small id="currentLabelX">Core market</small><strong id="currentX">—</strong></div><div><small id="currentLabelY">Supporting</small><strong id="currentY">—</strong></div><div><small id="currentLabelZ">Satellite</small><strong id="currentZ">—</strong></div></div>        <div class="address"><span>Contract</span><code id="address">—</code></div></div>
+   <div class="health-card" id="healthCard"><div class="card-kicker"><span class="small-label">INCIDENT STATUS</span><span class="status-dot" aria-hidden="true"></span></div><strong id="phase">—</strong><p id="healthDescription">Reading the deployed Fe contract…</p><div class="lifecycle" aria-label="Incident lifecycle"><span data-phase="0">Inactive</span><span aria-hidden="true">→</span><span data-phase="1">Recovering</span><span aria-hidden="true">→</span><span data-phase="2">Contained</span></div></div>
+  </section>
+  <div class="stats"><div class="stat"><span class="stat-icon" aria-hidden="true">↗</span><div><small>Current revision</small><strong id="revision">—</strong></div><span class="stat-note">Version-bound actions</span></div><div class="stat"><span class="stat-icon" aria-hidden="true">↓</span><div><small>Exposure deficit</small><strong id="exposure">—</strong></div><span class="stat-note">Must not increase</span></div><div class="stat"><span class="stat-icon" aria-hidden="true">↓</span><div><small>Buffer deficit</small><strong id="buffer">—</strong></div><span class="stat-note">Must not increase</span></div></div>
+  <div class="caller-bar"><div><label for="role">Demo transaction caller</label><p id="roleHint">Operator edits state. Guardian manages incidents.</p></div><select id="role"><option value="admin">Operator · can edit state</option><option value="guardian">Guardian · incident authority</option><option value="reviewer">Reviewer · no write access</option></select></div>
+  <div class="grid">
+      <section class="panel" id="controls"><div class="section-top"><span class="num">01</span><div><h2>Protected controls</h2><p id="description">Reading contract configuration…</p></div><span class="role-tag">OPERATOR</span></div>
+
+
         <div class="triple">
           <label><span id="labelX">Core</span><input id="x" type="number" min="0" max="1000000" step="1" value="350"></label>
           <label><span id="labelY">Supporting</span><input id="y" type="number" min="0" max="1000000" step="1" value="350"></label>
           <label><span id="labelZ">Satellite</span><input id="z" type="number" min="0" max="1000000" step="1" value="100"></label>
         </div>
-        <div class="actions"><button id="preview" type="button">Preview using Fe</button><button class="primary" id="commit" type="button">Commit change</button></div>
-        <p id="previewResult" class="outcome">No pending preview.</p>
-        <div class="subpanel"><div class="mini-head">Atomic two-field migration</div><p>Updates two fields in one Fe guarded scope; only final state may be committed.</p>
+        <div class="actions"><button id="preview" type="button">Preview using Fe <small>Read only</small></button><button class="primary" id="commit" type="button">Commit change</button></div>
+        <p id="previewResult" class="outcome" role="status">No pending preview.</p>
+        <details class="subpanel" id="migrationDetails"><summary>Guarded two-field migration <span aria-hidden="true">+</span></summary><p>One guarded scope. Only the final state commits.</p>
           <div class="migration-grid"><label>First index <select id="first"><option value="0">0 · X</option><option value="1">1 · Y</option><option value="2">2 · Z</option></select></label><label>First value <input id="firstValue" type="number" value="350" min="0" step="1"></label><label>Second index <select id="second"><option value="0">0 · X</option><option value="1" selected>1 · Y</option><option value="2">2 · Z</option></select></label><label>Second value <input id="secondValue" type="number" value="350" min="0" step="1"></label></div>
           <button type="button" id="migrate">Execute guarded migration</button>
-        </div>
+        </details><p class="recovery-guide"><strong>Recovering?</strong> Use these controls to shrink a deficit. Neither deficit may grow; at least one must shrink.</p>
       </section>
-      <section class="panel"><div class="section-top"><span class="num">02</span><div><h2>Emergency obligation</h2><p>Guardian controls activation and release. Fe enforces every recovery transition.</p></div></div>
-        <div class="incident-details"><div><small>Incident ID</small><strong id="incidentId">—</strong></div><div><small>Protected field</small><strong id="protectedMarket">—</strong></div><div><small>Maximum allowed</small><strong id="incidentMaximum">—</strong></div><div><small>Required buffer</small><strong id="incidentMinimum">—</strong></div></div>
+      <section class="panel" id="incident-controls"><div class="section-top"><span class="num amber">02</span><div><h2>Incident lifecycle</h2><p>Guardian activates and releases. Fe enforces every recovery transition.</p></div><span class="role-tag guardian">GUARDIAN</span></div>
+        <div class="incident-details"><div><small>Incident ID</small><strong id="incidentId">—</strong></div><div><small>Protected field</small><strong id="protectedMarket">—</strong></div><div><small>Stored ceiling</small><strong id="incidentMaximum">—</strong></div><div><small>Stored buffer minimum</small><strong id="incidentMinimum">—</strong></div></div>
         <div class="risk"><div class="risk-title">Deficit vector <code>(exposure, buffer)</code></div><div class="risk-bars"><div><small>Exposure</small><div class="bar"><span id="riskExposure"></span></div></div><div><small>Buffer</small><div class="bar"><span id="riskBuffer"></span></div></div></div><p>RECOVERING: neither deficit may grow, and at least one must shrink. CONTAINED: both must remain zero.</p></div>
-        <div class="config"><label>Protected field <select id="market"><option value="0">0 · X</option><option value="1">1 · Y</option><option value="2">2 · Z</option></select></label><label>Exposure ceiling <input id="maximum" type="number" min="0" step="1" value="200"></label><label>Required buffer <input id="bufferMinimum" type="number" min="0" step="1" value="300"></label></div>
+        <div class="form-caption">NEW INCIDENT OBJECTIVE <span>Guardian only</span></div><div class="config"><label>Protected field <select id="market"><option value="0">0 · X</option><option value="1">1 · Y</option><option value="2">2 · Z</option></select></label><label>Exposure ceiling <input id="maximum" type="number" min="0" step="1" value="200"></label><label>Required buffer <input id="bufferMinimum" type="number" min="0" step="1" value="300"></label></div>
         <div class="actions"><button id="progressive" type="button" class="secondary">Activate progressive</button><button id="atomic" type="button" class="secondary">Activate + contain atomically</button></div>
-        <p class="hint">Atomic activation uses your proposed X / Y / Z values from the left panel. Progressive activation preserves the current allocations.</p>
+        <p class="hint">Progressive: keep current state, then recover through operator changes. Atomic: contain using your proposed values in Protected controls.</p>
         <button id="release" class="release" type="button">Release current incident by exact ID</button>
-        <p id="incidentResult" class="outcome">No incident command submitted.</p>
+        <p class="hint">Release requires containment, the exact incident ID and the current revision. Guardian only.</p><p id="incidentResult" class="outcome" role="status">No incident command submitted.</p>
       </section>
     </div>
-    <section class="panel evidence"><div class="section-top"><span class="num">03</span><div><h2>Execution evidence</h2><p>Every outcome below comes from an actual Fe EVM transaction, with a before/after snapshot and local hash-linked audit receipt.</p></div></div><pre id="output">Select a domain to inspect its deployed Fe contract.</pre><small>This is a local demonstration, not a third-party-audited security product. Restart resets EVM state; the audit journal remains on disk.</small></section>
-    <footer>Reusable ingot: <code>covenant_transition::Guard3</code> · Fe 26.5.0 · <a href="/">Return to the original 7-view workspace</a></footer>
-  </div>
-</body></html>
+
+  <section class="panel evidence" id="evidence"><div class="section-top"><span class="num">03</span><div><h2>Execution evidence</h2><p>The latest response, with state reads, previews and transactions clearly separated.</p></div><span class="evidence-badge" id="evidenceBadge">AWAITING STATE</span></div>
+   <div class="evidence-summary" aria-live="polite"><div class="evidence-outcome"><span class="small-label">LATEST OBSERVATION</span><strong id="evidenceTitle">Connecting to the local EVM</strong><p id="evidenceSubtitle">The response will appear when the contract is ready.</p></div><div class="evidence-metric"><small>Revision</small><strong id="evidenceRevision">—</strong></div><div class="evidence-metric"><small>Gas used</small><strong id="evidenceGas">—</strong></div><div class="evidence-metric"><small>Audit persistence</small><strong id="evidenceAudit">—</strong></div></div>
+   <div class="evidence-toolbar"><div class="evidence-tabs" role="tablist" aria-label="Execution evidence views">
+    <button id="evidence-tab-overview" type="button" role="tab" aria-selected="true" aria-controls="evidence-overview" data-evidence-tab="overview">Overview</button>
+    <button id="evidence-tab-state" type="button" role="tab" aria-selected="false" aria-controls="evidence-state" tabindex="-1" data-evidence-tab="state">Before / after</button>
+    <button id="evidence-tab-receipt" type="button" role="tab" aria-selected="false" aria-controls="evidence-receipt" tabindex="-1" data-evidence-tab="receipt">Receipt</button>
+    <button id="evidence-tab-raw" type="button" role="tab" aria-selected="false" aria-controls="evidence-raw" tabindex="-1" data-evidence-tab="raw">Raw response</button>
+   </div><button type="button" class="copy-button" id="copyEvidence" aria-label="Copy complete raw response">Copy JSON ⧉</button></div>
+   <div id="evidence-overview" class="evidence-view" role="tabpanel" aria-labelledby="evidence-tab-overview"><dl id="evidenceFields" class="evidence-fields"></dl></div>
+   <div id="evidence-state" class="evidence-view" role="tabpanel" aria-labelledby="evidence-tab-state" hidden><div id="stateComparison"></div></div>
+   <div id="evidence-receipt" class="evidence-view" role="tabpanel" aria-labelledby="evidence-tab-receipt" hidden><pre id="receiptOutput" tabindex="0">No transaction receipt. Read-only calls do not submit a transaction.</pre></div>
+   <div id="evidence-raw" class="evidence-view" role="tabpanel" aria-labelledby="evidence-tab-raw" hidden><pre id="output" tabindex="0">Waiting for the first Fe response…</pre></div>
+   <div class="evidence-foot"><span><i></i> Fe EVM output · local evidence</span><span id="copyStatus" role="status">Full response retained in Raw response.</span></div>
+  </section>
+  <aside class="trust-boundary" id="trust-boundary"><span class="trust-icon" aria-hidden="true">!</span><div><h2>Local by design. Explicit about trust.</h2><p>The localhost server holds disposable demo signers. Choosing a role is <strong>not real-user authentication</strong>; Fe separately authorizes operator and guardian calls. Never use these keys or this interface on a public chain.</p><p>Restart resets EVM state. The local hash-linked journal remains on disk and can be rewritten by the host. This is a local demonstration, not a third-party-audited security product.</p></div></aside>
+  <footer><span>COVENANT GUARD <span class="footer-divider">/</span> <code>covenant_transition::Guard3</code></span><a href="/">Return to the 7-view workspace ↗</a></footer>
+ </div>
+</main></body></html>
