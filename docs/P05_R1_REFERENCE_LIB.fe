@@ -1,0 +1,827 @@
+// Covenant Guard P04-R1: dimension-wise strictly progressive incident recovery.
+// P03 owner Fe 26.5.0 result: 29/29 Fe tests and deployable ABI PASS.
+// P04 requires new real compiler and EVM verification before acceptance.
+// No production custody, live oracle, or public chain.
+// IMPORTANT: the owning contract can replace the entire Guarded value;
+// the consumer must restrict all public state-writing routes itself.
+
+const INPUT_CEILING: u256 = 1000000
+
+pub struct Draft {
+    pub a: u256,
+    pub b: u256,
+    pub c: u256,
+}
+impl Copy for Draft {}
+
+// All permanent rules live outside the public mutable Draft.
+struct Rules {
+    budget: u256,
+    reserve_floor: u256,
+    cap_a: u256,
+    cap_b: u256,
+    cap_c: u256,
+}
+impl Copy for Rules {}
+
+// Diagnostic flags: 1=TOTAL, 2=MARKET_CAP, 4=RESERVE,
+// 8=PAIRED_EXPOSURE, 16=STALE (preview only), 32=INPUT_CEILING,
+// 64=OPERATION_FAILURE (preview only).
+fn violations(_ d: Draft, _ r: Rules) -> u256 {
+    if d.a > INPUT_CEILING || d.b > INPUT_CEILING || d.c > INPUT_CEILING {
+        return 32
+    }
+    // Each operand <= 1e6. No arithmetic overflow in the sum.
+    let used = d.a + d.b + d.c
+    var mask: u256 = 0
+    if used > r.budget { mask += 1 }
+    if d.a > r.cap_a || d.b > r.cap_b || d.c > r.cap_c { mask += 2 }
+    if used + r.reserve_floor > r.budget { mask += 4 }
+    if d.a > d.b * 2 { mask += 8 }
+    mask
+}
+
+fn assigned(_ current: Draft, _ market: u256, _ value: u256) -> Draft {
+    assert!(market < 3 && value <= INPUT_CEILING)
+    var result = current
+    if market == 0 { result.a = value }
+    else if market == 1 { result.b = value }
+    else { result.c = value }
+    result
+}
+
+fn at(_ d: Draft, _ market: u256) -> u256 {
+    if market == 0 { d.a }
+    else if market == 1 { d.b }
+    else { d.c }
+}
+
+fn put(_ d: mut Draft, _ market: u256, _ value: u256) {
+    if market == 0 { d.a = value }
+    else if market == 1 { d.b = value }
+    else { d.c = value }
+}
+
+// Operation wire encoding follows the original Covenant Control contract:
+// 0-8 MOVE(from=opcode/3, to=opcode%3), 9-11 RETIRE,
+// 12-14 ISSUE, 15-17 EXPECT a value at this exact instruction.
+// Errors: 1=bad opcode, 2=bad amount, 3=self-move, 4=source shortage,
+// 5=insufficient free budget, 6=failed exact expectation, 7=value ceiling.
+// Immediate operation constraints hold even if the final state would be valid.
+fn action(_ d: mut Draft, _ opcode: u256, _ amount: u256, _ budget: u256) -> u256 {
+    if opcode >= 18 { return 1 }
+    if amount > INPUT_CEILING { return 2 }
+    if opcode < 9 {
+        if amount == 0 { return 2 }
+        let from = opcode / 3
+        let to = opcode % 3
+        if from == to { return 3 }
+        let source = at(d, from)
+        if source < amount { return 4 }
+        let destination = at(d, to)
+        if destination + amount > INPUT_CEILING { return 7 }
+        put(mut d, from, source - amount)
+        put(mut d, to, destination + amount)
+        return 0
+    }
+    if opcode < 12 {
+        if amount == 0 { return 2 }
+        let market = opcode - 9
+        let source = at(d, market)
+        if source < amount { return 4 }
+        put(mut d, market, source - amount)
+        return 0
+    }
+    if opcode < 15 {
+        if amount == 0 { return 2 }
+        let market = opcode - 12
+        let current = at(d, market)
+        if current + amount > INPUT_CEILING { return 7 }
+        let used = d.a + d.b + d.c
+        if used > budget || used + amount > budget { return 5 }
+        put(mut d, market, current + amount)
+        return 0
+    }
+    let market = opcode - 15
+    if at(d, market) != amount { return 6 }
+    0
+}
+
+// Stage ordered actions independently of storage. Preview and commit both
+// share the same library-defined instruction semantics, but P07 will compare
+// both against an independent model rather than mistake agreement for proof.
+fn stage(_ starting: Draft, _ count: u256,
+         _ o1: u256, _ n1: u256, _ o2: u256, _ n2: u256,
+         _ o3: u256, _ n3: u256, _ budget: u256)
+    -> (Draft, u256, u256, u256, u256) {
+    assert!(count >= 1 && count <= 3)
+    var draft = starting
+    let e1 = action(mut draft, o1, n1, budget)
+    if e1 != 0 { return (draft, 16 + e1, 0, 0, e1) }
+    var e2: u256 = 0
+    var e3: u256 = 0
+    if count >= 2 {
+        e2 = action(mut draft, o2, n2, budget)
+        if e2 != 0 { return (draft, 0, 32 + e2, 0, 16 + e2) }
+    }
+    if count >= 3 {
+        e3 = action(mut draft, o3, n3, budget)
+        if e3 != 0 { return (draft, 0, 0, 48 + e3, 32 + e3) }
+    }
+    (draft, 0, 0, 0, 0)
+}
+
+// Incident phases: 0=NORMAL, 1=RECOVERING, 2=CONTAINED.
+// Keep phase as u256 to avoid packed-bool compiler forms. Only a guardian
+// adapter can activate or release; the library itself cannot authenticate callers.
+struct Incident {
+    phase: u256,
+    id: u256,
+    market: u256,
+    maximum: u256,
+    reserve: u256,
+}
+impl Copy for Incident {}
+
+fn valid_spec(_ r: Rules, _ market: u256, _ maximum: u256, _ reserve: u256) -> bool {
+    market < 3 && maximum <= INPUT_CEILING && reserve <= r.budget
+        && reserve >= r.reserve_floor
+}
+
+// Bit 1: affected exposure exceeds max; bit 2: reserve below minimum;
+// bit 4: invalid incident specification. This is evaluated against actual
+// resulting allocations, independent of the JavaScript planner.
+fn incident_violations(_ d: Draft, _ r: Rules,
+                       _ market: u256, _ maximum: u256, _ reserve: u256) -> u256 {
+    if !valid_spec(r, market, maximum, reserve) { return 4 }
+    if d.a > INPUT_CEILING || d.b > INPUT_CEILING || d.c > INPUT_CEILING { return 4 }
+    var mask: u256 = 0
+    if at(d, market) > maximum { mask += 1 }
+    let used = d.a + d.b + d.c
+    if used > r.budget || used + reserve > r.budget { mask += 2 }
+    mask
+}
+
+// Deficits are nonnegative integer distances from the stored incident target.
+// (exposure above maximum, free reserve below minimum). Permanent-policy
+// bounds are checked BEFORE this function is called on untrusted candidates.
+fn deficits(_ d: Draft, _ r: Rules, _ i: Incident) -> (u256,u256) {
+    if i.phase == 0 { return (0,0) }
+    let exposure = at(d, i.market)
+    let exposure_deficit = if exposure > i.maximum { exposure - i.maximum } else { 0 }
+    let used = d.a + d.b + d.c
+    let free = if used <= r.budget { r.budget - used } else { 0 }
+    let reserve_deficit = if free < i.reserve { i.reserve - free } else { 0 }
+    (exposure_deficit, reserve_deficit)
+}
+
+// 128 denotes an invalid transition under the CURRENT STORED obligation.
+// RECOVERING: both risk-deficit components must be nonincreasing, at least
+// one strictly decreasing; false 'progress' via a no-op or EXPECT is denied.
+// CONTAINED: both deficits must remain zero on every mutation path.
+fn incident_transition_mask(_ before: Draft, _ after: Draft,
+                            _ rules: Rules, _ inc: Incident) -> u256 {
+    if inc.phase == 0 { return 0 }
+    // Prevent invalidly large preview values from reaching arithmetic.
+    if violations(after, rules) != 0 { return 128 }
+    let previous = deficits(before, rules, inc)
+    let current = deficits(after, rules, inc)
+    if inc.phase == 2 {
+        if current.0 != 0 || current.1 != 0 { return 128 }
+        return 0
+    }
+    if inc.phase == 1 {
+        if current.0 > previous.0 || current.1 > previous.1 { return 128 }
+        if current.0 == previous.0 && current.1 == previous.1 { return 128 }
+        return 0
+    }
+    128
+}
+
+// Rules, incident metadata and revision are private. Only Draft is mutable.
+
+pub struct Guarded {
+    value: Draft,
+    rules: Rules,
+    revision: u256,
+    incident: Incident,
+}
+
+impl Guarded {
+    pub fn new(_ a: u256, _ b: u256, _ c: u256,
+               _ budget: u256, _ reserve_floor: u256,
+               _ cap_a: u256, _ cap_b: u256, _ cap_c: u256) -> Self {
+        assert!(budget <= INPUT_CEILING)
+        assert!(reserve_floor <= budget)
+        assert!(cap_a <= INPUT_CEILING && cap_b <= INPUT_CEILING && cap_c <= INPUT_CEILING)
+        let state = Draft { a, b, c }
+        let rules = Rules { budget, reserve_floor, cap_a, cap_b, cap_c }
+        assert!(violations(state, rules) == 0)
+        Guarded {
+            value: state, rules, revision: 1,
+            incident: Incident {phase:0,id:0,market:0,maximum:0,reserve:0},
+        }
+    }
+
+    pub fn snapshot(self) -> (u256,u256,u256,u256,u256,u256,u256,u256,u256) {
+        (self.revision, self.value.a, self.value.b, self.value.c,
+         self.rules.budget, self.rules.reserve_floor,
+         self.rules.cap_a, self.rules.cap_b, self.rules.cap_c)
+    }
+
+    // Full incident metadata, including the last incident id after release.
+    // Never interpret inactive metadata as an active policy.
+    pub fn incident_snapshot(self) -> (u256,u256,u256,u256,u256) {
+        (self.incident.phase, self.incident.id, self.incident.market,
+         self.incident.maximum, self.incident.reserve)
+    }
+
+    // Read-only risk distances; inactive incidents have no active deficit.
+    pub fn deficit_snapshot(self) -> (u256,u256) {
+        deficits(self.value, self.rules, self.incident)
+    }
+
+    pub fn version(self) -> u256 { self.revision }
+
+    pub fn preview_direct(self, _ expected: u256, _ a: u256, _ b: u256, _ c: u256)
+        -> (u256,u256,u256,u256) {
+        let state = Draft { a, b, c }
+        var flags = violations(state, self.rules)
+        if expected != self.revision { flags += 16 }
+        if incident_transition_mask(self.value, state, self.rules, self.incident) != 0 {
+            flags += 128
+        }
+        if a > INPUT_CEILING || b > INPUT_CEILING || c > INPUT_CEILING {
+            return (flags, self.revision + 1, 0, 0)
+        }
+        let used = a + b + c
+        let reserve = if used <= self.rules.budget { self.rules.budget - used } else { 0 }
+        (flags, self.revision + 1, used, reserve)
+    }
+
+    // Shared authoritative transition: revision binding + the permanent
+    // postcondition are checked in one compiler-managed projection slide.
+    // The caller can edit Draft, NEVER rule config or revision through it.
+    pub fn checked_edit(mut self, _ expected: u256) -> mut Draft {
+        assert!(expected == self.revision)
+        let before = self.value
+        var candidate = before
+        yield mut candidate
+        assert!(violations(candidate, self.rules) == 0)
+        assert!(incident_transition_mask(before, candidate, self.rules, self.incident) == 0)
+        // Only a successful checked transition may advance an uncontained
+        // incident to CONTAINED. Both deficit components must be exactly zero.
+        if self.incident.phase == 1 {
+            let remaining = deficits(candidate, self.rules, self.incident)
+            if remaining.0 == 0 && remaining.1 == 0 {
+                self.incident.phase = 2
+            }
+        }
+        self.value = candidate
+        self.revision += 1
+    }
+
+    pub fn commit_direct(mut self, _ expected: u256, _ a: u256, _ b: u256, _ c: u256) -> u256 {
+        let edit = mut self.checked_edit(expected)
+        edit.a = a
+        edit.b = b
+        edit.c = c
+        self.version()
+    }
+
+    // Staged set-market migration: each instruction has an input-domain
+    // precondition, while the multi-market permanent policy is end-of-scope.
+    pub fn commit_migration(mut self, _ expected: u256, _ count: u256,
+                            _ m1: u256, _ v1: u256, _ m2: u256, _ v2: u256,
+                            _ m3: u256, _ v3: u256) -> u256 {
+        assert!(count >= 1 && count <= 3)
+        let edit = mut self.checked_edit(expected)
+        assert!(m1 < 3 && v1 <= INPUT_CEILING)
+        put(mut edit, m1, v1)
+        if count >= 2 {
+            assert!(m2 < 3 && v2 <= INPUT_CEILING)
+            put(mut edit, m2, v2)
+        }
+        if count >= 3 {
+            assert!(m3 < 3 && v3 <= INPUT_CEILING)
+            put(mut edit, m3, v3)
+        }
+        self.version()
+    }
+
+    // Preview returns (policy mask, operation error, candidate a,b,c,
+    // next revision, per-step failures 1/2/3). The candidate from a
+    // rejected stage is a partial diagnostic, never an approved final plan.
+    pub fn preview_actions(self, _ expected: u256, _ count: u256,
+                           _ o1: u256, _ n1: u256, _ o2: u256, _ n2: u256,
+                           _ o3: u256, _ n3: u256)
+        -> (u256,u256,u256,u256,u256,u256,u256,u256,u256) {
+        let (candidate, s1, s2, s3, op_error) =
+            stage(self.value, count, o1, n1, o2, n2, o3, n3, self.rules.budget)
+        var mask = violations(candidate, self.rules)
+        if expected != self.revision { mask += 16 }
+        if op_error != 0 { mask += 64 }
+        if incident_transition_mask(self.value, candidate, self.rules, self.incident) != 0 {
+            mask += 128
+        }
+        (mask, op_error, candidate.a, candidate.b, candidate.c,
+         self.revision + 1, s1, s2, s3)
+    }
+
+    pub fn commit_actions(mut self, _ expected: u256, _ count: u256,
+                          _ o1: u256, _ n1: u256, _ o2: u256, _ n2: u256,
+                          _ o3: u256, _ n3: u256) -> u256 {
+        assert!(count >= 1 && count <= 3)
+        // The guarded edit is the single storage-write boundary; checks
+        // for each action execute immediately and are not deferred.
+        // Copy rule input BEFORE borrowing the entire guarded object.
+        // Accessing `self.rules` while the draft grant is live would be an
+        // overlapping access. The immutable budget value is a local scalar.
+        let budget = self.rules.budget
+        let edit = mut self.checked_edit(expected)
+        assert!(action(mut edit, o1, n1, budget) == 0)
+        if count >= 2 { assert!(action(mut edit, o2, n2, budget) == 0) }
+        if count >= 3 { assert!(action(mut edit, o3, n3, budget) == 0) }
+        self.version()
+    }
+
+    pub fn commit_goal(mut self, _ expected: u256, _ count: u256,
+                       _ o1: u256, _ n1: u256, _ o2: u256, _ n2: u256,
+                       _ o3: u256, _ n3: u256,
+                       _ a: u256, _ b: u256, _ c: u256) -> u256 {
+        assert!(count >= 1 && count <= 3)
+        let budget = self.rules.budget
+        let edit = mut self.checked_edit(expected)
+        assert!(action(mut edit, o1, n1, budget) == 0)
+        if count >= 2 { assert!(action(mut edit, o2, n2, budget) == 0) }
+        if count >= 3 { assert!(action(mut edit, o3, n3, budget) == 0) }
+        assert!(edit.a == a && edit.b == b && edit.c == c)
+        self.version()
+    }
+
+    // P03 atomic activation: no uncontained active state can be written.
+    // Caller authentication belongs to the integrating adapter, which
+    // MUST expose this only to its guardian role.
+    // Incident is written first, then the existing goal-attested action
+    // pipeline commits under that objective in the SAME EVM transaction.
+    // Any failure reverts incident + revision + allocations together.
+    pub fn activate_and_contain(mut self, _ expected:u256,
+                                _ market:u256, _ maximum:u256, _ reserve:u256,
+                                _ count:u256, _ o1:u256, _ n1:u256,
+                                _ o2:u256, _ n2:u256, _ o3:u256, _ n3:u256,
+                                _ a:u256, _ b:u256, _ c:u256) -> u256 {
+        assert!(self.incident.phase == 0)
+        assert!(expected == self.revision)
+        assert!(valid_spec(self.rules, market, maximum, reserve))
+        let next_id = self.incident.id + 1
+        self.incident = Incident {phase:2,id:next_id,market,maximum,reserve}
+        self.commit_goal(expected,count,o1,n1,o2,n2,o3,n3,a,b,c)
+    }
+
+    // Guardian-only adapter operation. This activates a genuinely uncontained
+    // incident without changing allocation state: a separate revision is
+    // required so every pre-existing operator plan becomes stale.
+    // Strict risk progress is enforced on each subsequent allocation write.
+    pub fn activate_progressive(mut self, _ expected:u256,
+                                _ market:u256, _ maximum:u256, _ reserve:u256) -> u256 {
+        assert!(self.incident.phase == 0)
+        assert!(expected == self.revision)
+        assert!(violations(self.value, self.rules) == 0)
+        assert!(valid_spec(self.rules, market, maximum, reserve))
+        let id = self.incident.id + 1
+        self.incident = Incident { phase:1, id, market, maximum, reserve }
+        let current = deficits(self.value, self.rules, self.incident)
+        if current.0 == 0 && current.1 == 0 { self.incident.phase = 2 }
+        self.revision += 1
+        self.revision
+    }
+
+    // No operator-controlled objective weakening. All supplied parameters
+    // must exactly equal the stored objective. Ordinary commit routes are
+    // guarded too, even when callers avoid this specialized method.
+    pub fn commit_incident(mut self, _ expected:u256, _ count:u256,
+                           _ o1:u256, _ n1:u256, _ o2:u256, _ n2:u256,
+                           _ o3:u256, _ n3:u256,
+                           _ a:u256, _ b:u256, _ c:u256,
+                           _ market:u256, _ maximum:u256, _ reserve:u256) -> u256 {
+        assert!(self.incident.phase != 0)
+        assert!(market == self.incident.market)
+        assert!(maximum == self.incident.maximum)
+        assert!(reserve == self.incident.reserve)
+        self.commit_goal(expected,count,o1,n1,o2,n2,o3,n3,a,b,c)
+    }
+
+    // Diagnostic: bit 4 means no active policy or mismatched claimed spec.
+    // Preview remains pure and cannot authorize a real commitment.
+    pub fn preview_incident(self, _ expected:u256, _ count:u256,
+                            _ o1:u256, _ n1:u256, _ o2:u256, _ n2:u256,
+                            _ o3:u256, _ n3:u256,
+                            _ a:u256, _ b:u256, _ c:u256,
+                            _ market:u256, _ maximum:u256, _ reserve:u256)
+        -> (u256,u256,u256,bool,u256,u256,u256) {
+        let p = self.preview_actions(expected,count,o1,n1,o2,n2,o3,n3)
+        let candidate_a = p.2
+        let candidate_b = p.3
+        let candidate_c = p.4
+        let candidate = Draft {a:candidate_a,b:candidate_b,c:candidate_c}
+        var inc_mask = incident_violations(candidate,self.rules,market,maximum,reserve)
+        if self.incident.phase == 0 || market != self.incident.market
+           || maximum != self.incident.maximum || reserve != self.incident.reserve {
+            inc_mask = 4
+        }
+        (p.0,p.1,inc_mask,
+         candidate_a == a && candidate_b == b && candidate_c == c,
+         candidate_a,candidate_b,candidate_c)
+    }
+
+    // Guardian-only adapter method. Containment is already guaranteed on
+    // every P03 mutation. Release invalidates all pre-release plans once.
+    // The historical incident id and bounds remain readable but inactive.
+    // Stronger guardian interface binds the exact incident identifier as
+    // well as global revision. Legacy release(expected) still exists for P03
+    // compatibility and is guardian-gated by the adapter.
+    pub fn release_bound(mut self, _ expected:u256, _ id:u256) -> u256 {
+        assert!(self.incident.id == id)
+        self.release(expected)
+    }
+
+    pub fn release(mut self, _ expected:u256) -> u256 {
+        assert!(self.incident.phase == 2)
+        assert!(expected == self.revision)
+        assert!(violations(self.value,self.rules) == 0)
+        assert!(incident_violations(self.value,self.rules,self.incident.market,
+                                    self.incident.maximum,self.incident.reserve) == 0)
+        self.incident.phase = 0
+        self.revision += 1
+        self.revision
+    }
+
+}
+
+#[test]
+fn good_checked_edit_is_versioned() {
+    var g = Guarded::new(a:400,b:300,c:100,budget:1000,reserve_floor:100,
+                         cap_a:550,cap_b:500,cap_c:350)
+    let draft = mut g.checked_edit(1)
+    draft.a = 350
+    draft.b = 350
+    draft.c = 100
+    let s = g.snapshot()
+    assert!(s.0 == 2 && s.1 == 350 && s.2 == 350 && s.3 == 100
+            && s.4 == 1000 && s.5 == 100 && s.6 == 550
+            && s.7 == 500 && s.8 == 350)
+}
+
+#[test]
+fn pure_preview_does_not_mutate() {
+    let g = Guarded::new(a:400,b:300,c:100,budget:1000,reserve_floor:100,
+                         cap_a:550,cap_b:500,cap_c:350)
+    let p = g.preview_direct(1,350,350,100)
+    assert!(p.0 == 0 && p.1 == 2 && p.2 == 800 && p.3 == 200)
+    assert!(g.preview_direct(1,560,300,0).0 == 2)
+    assert!(g.preview_direct(1,400,450,150).0 == 4)
+    assert!(g.preview_direct(0,350,350,100).0 == 16)
+    assert!(g.snapshot().0 == 1)
+}
+
+#[test]
+fn action_preview_produces_exact_candidate_and_errors() {
+    let g = Guarded::new(a:400,b:300,c:100,budget:1000,reserve_floor:100,
+                         cap_a:550,cap_b:500,cap_c:350)
+    // RETIRE core 200, then ISSUE supporting 100.
+    let p = g.preview_actions(1, 2, 9, 200, 13, 100, 0, 0)
+    assert!(p.0 == 0 && p.1 == 0 && p.2 == 200 && p.3 == 400 && p.4 == 100)
+    // EXPECT core=200 must fail before any earlier retirement.
+    let wrong = g.preview_actions(1, 1, 15, 200, 0, 0, 0, 0)
+    assert!(wrong.1 == 6 && wrong.0 == 64 && wrong.6 == 22)
+}
+
+#[test]
+fn p03_initial_incident_metadata_is_inactive() {
+    let g = Guarded::new(a:400,b:300,c:100,budget:1000,reserve_floor:100,
+                         cap_a:550,cap_b:500,cap_c:350)
+    let i = g.incident_snapshot()
+    assert!(i.0 == 0 && i.1 == 0 && i.2 == 0 && i.3 == 0 && i.4 == 0)
+}
+
+#[test]
+fn p03_invalid_incident_spec_detected() {
+    let r = Rules {budget:1000,reserve_floor:100,
+                   cap_a:550,cap_b:500,cap_c:350}
+    let d = Draft {a:200,b:300,c:100}
+    assert!(incident_violations(d,r,0,200,300) == 0)
+    assert!(incident_violations(d,r,0,100,300) == 1)
+    assert!(incident_violations(d,r,0,200,500) == 2)
+    assert!(incident_violations(d,r,9,200,300) == 4)
+}
+
+
+#[test]
+fn p04_deficits_match_exact_both_dimensions() {
+    let r = Rules {budget:1000,reserve_floor:100,cap_a:550,cap_b:500,cap_c:350}
+    let inc = Incident {phase:1,id:1,market:0,maximum:200,reserve:300}
+    let a = deficits(Draft {a:400,b:300,c:100},r,inc)
+    let b = deficits(Draft {a:300,b:300,c:100},r,inc)
+    let c = deficits(Draft {a:200,b:300,c:100},r,inc)
+    assert!(a.0 == 200 && a.1 == 100)
+    assert!(b.0 == 100 && b.1 == 0)
+    assert!(c.0 == 0 && c.1 == 0)
+}
+
+#[test]
+fn p04_transition_requires_strict_nonworsening_progress() {
+    let r = Rules {budget:1000,reserve_floor:100,cap_a:550,cap_b:500,cap_c:350}
+    let inc = Incident {phase:1,id:1,market:0,maximum:200,reserve:300}
+    let start = Draft {a:400,b:300,c:100}
+    let improvement = Draft {a:300,b:300,c:100}
+    let regression = Draft {a:350,b:300,c:100}
+    let tradeoff = Draft {a:300,b:450,c:100}
+    assert!(incident_transition_mask(start,improvement,r,inc) == 0)
+    assert!(incident_transition_mask(improvement,regression,r,inc) == 128)
+    assert!(incident_transition_mask(start,tradeoff,r,inc) == 128)
+    assert!(incident_transition_mask(start,start,r,inc) == 128)
+}
+
+#[test]
+fn p04_contained_only_rejects_new_deficits() {
+    let r = Rules {budget:1000,reserve_floor:100,cap_a:550,cap_b:500,cap_c:350}
+    let inc = Incident {phase:2,id:1,market:0,maximum:200,reserve:300}
+    let safe = Draft {a:200,b:300,c:100}
+    let another = Draft {a:200,b:350,c:100}
+    let regression = Draft {a:250,b:300,c:100}
+    assert!(incident_transition_mask(safe,another,r,inc) == 0)
+    assert!(incident_transition_mask(safe,regression,r,inc) == 128)
+}
+
+
+// --- P05: genuinely parameterized, reusable guarded three-field kernel. ---
+// NOTE: P04 allocation-specific Guarded implementation above is preserved
+// byte-for-byte. P05 supplies a separately consumed generic primitive.
+// P06 must integrate this primitive into the flagship adapter before claiming
+// the flagship itself uses the generic core. Avoid invented security claims.
+
+pub struct TripleDraft {
+    pub x: u256,
+    pub y: u256,
+    pub z: u256,
+}
+impl Copy for TripleDraft {}
+
+// Input policy is copied into PRIVATE guarded storage and never lent to an
+// editing caller. Governance and allocation configure different constraints.
+// Buffer mode: 0 = total - (x+y+z); 1 = z (e.g. governance delay).
+pub struct TripleLimits {
+    pub total: u256,
+    pub reserve_floor: u256,
+    pub min_x: u256,
+    pub min_y: u256,
+    pub min_z: u256,
+    pub cap_x: u256,
+    pub cap_y: u256,
+    pub cap_z: u256,
+    pub ratio_x_y: u256,
+    pub buffer_mode: u256,
+}
+impl Copy for TripleLimits {}
+
+fn triple_limits_ok(_ r: TripleLimits) -> bool {
+    r.total <= INPUT_CEILING && r.reserve_floor <= r.total
+        && r.cap_x <= INPUT_CEILING && r.cap_y <= INPUT_CEILING
+        && r.cap_z <= INPUT_CEILING && r.min_x <= r.cap_x
+        && r.min_y <= r.cap_y && r.min_z <= r.cap_z
+        && r.ratio_x_y <= 10 && r.buffer_mode <= 1
+}
+
+// Bit flags: 1=TOTAL; 2=UPPER; 4=RESERVE_FLOOR; 8=RATIO;
+// 16=LOWER; 32=INPUT_CEILING; 64=STALE; 128=INCIDENT_TRANSITION.
+fn triple_permanent_mask(_ d: TripleDraft, _ r: TripleLimits) -> u256 {
+    if d.x > INPUT_CEILING || d.y > INPUT_CEILING || d.z > INPUT_CEILING {
+        return 32
+    }
+    let used = d.x + d.y + d.z
+    var mask:u256 = 0
+    if used > r.total { mask += 1 }
+    if d.x > r.cap_x || d.y > r.cap_y || d.z > r.cap_z { mask += 2 }
+    if used + r.reserve_floor > r.total { mask += 4 }
+    if d.x > d.y * r.ratio_x_y { mask += 8 }
+    if d.x < r.min_x || d.y < r.min_y || d.z < r.min_z { mask += 16 }
+    mask
+}
+
+fn triple_at(_ d:TripleDraft,_ market:u256) -> u256 {
+    if market == 0 { d.x }
+    else if market == 1 { d.y }
+    else { d.z }
+}
+
+fn triple_put(_ d:mut TripleDraft,_ market:u256,_ value:u256) {
+    if market == 0 { d.x = value }
+    else if market == 1 { d.y = value }
+    else { d.z = value }
+}
+
+fn triple_buffer(_ d:TripleDraft,_ r:TripleLimits) -> u256 {
+    if r.buffer_mode == 1 { return d.z }
+    let used = d.x + d.y + d.z
+    if used > r.total { return 0 }
+    r.total - used
+}
+
+struct TripleIncident {
+    phase:u256,
+    id:u256,
+    market:u256,
+    maximum:u256,
+    buffer_min:u256,
+}
+impl Copy for TripleIncident {}
+
+fn triple_spec_ok(_ r:TripleLimits,_ market:u256,_ maximum:u256,_ buffer_min:u256) -> bool {
+    if market >= 3 || maximum > INPUT_CEILING { return false }
+    if r.buffer_mode == 0 {
+        buffer_min <= r.total && buffer_min >= r.reserve_floor
+    } else {
+        buffer_min <= r.cap_z && buffer_min >= r.min_z
+    }
+}
+
+fn triple_deficits(_ d:TripleDraft,_ r:TripleLimits,_ i:TripleIncident) -> (u256,u256) {
+    if i.phase == 0 { return (0,0) }
+    let exposure = triple_at(d,i.market)
+    let first = if exposure > i.maximum { exposure - i.maximum } else { 0 }
+    let buffer = triple_buffer(d,r)
+    let second = if buffer < i.buffer_min { i.buffer_min - buffer } else { 0 }
+    (first,second)
+}
+
+fn triple_transition_mask(_ before:TripleDraft,_ after:TripleDraft,
+                          _ rules:TripleLimits,_ incident:TripleIncident) -> u256 {
+    if incident.phase == 0 { return 0 }
+    if triple_permanent_mask(after,rules) != 0 { return 128 }
+    let old = triple_deficits(before,rules,incident)
+    let next = triple_deficits(after,rules,incident)
+    if incident.phase == 2 {
+        if next.0 != 0 || next.1 != 0 { return 128 }
+        return 0
+    }
+    if incident.phase == 1 {
+        if next.0 > old.0 || next.1 > old.1 { return 128 }
+        if next.0 == old.0 && next.1 == old.1 { return 128 }
+        return 0
+    }
+    128
+}
+
+pub struct Guard3 {
+    value: TripleDraft,
+    rules: TripleLimits,
+    revision: u256,
+    incident: TripleIncident,
+}
+
+impl Guard3 {
+    pub fn new(_ x:u256,_ y:u256,_ z:u256,_ config:TripleLimits) -> Self {
+        assert!(triple_limits_ok(config))
+        let starting = TripleDraft {x,y,z}
+        assert!(triple_permanent_mask(starting,config) == 0)
+        Guard3 {
+            value:starting,rules:config,revision:1,
+            incident:TripleIncident {phase:0,id:0,market:0,maximum:0,buffer_min:0},
+        }
+    }
+
+    pub fn snapshot(self) -> (u256,u256,u256,u256) {
+        (self.revision,self.value.x,self.value.y,self.value.z)
+    }
+    pub fn incident_snapshot(self) -> (u256,u256,u256,u256,u256) {
+        (self.incident.phase,self.incident.id,self.incident.market,
+         self.incident.maximum,self.incident.buffer_min)
+    }
+    pub fn deficits(self) -> (u256,u256) {
+        triple_deficits(self.value,self.rules,self.incident)
+    }
+    pub fn version(self) -> u256 { self.revision }
+
+    pub fn preview(self,_ expected:u256,_ x:u256,_ y:u256,_ z:u256)
+        -> (u256,u256,u256,u256) {
+        let draft = TripleDraft {x,y,z}
+        var mask = triple_permanent_mask(draft,self.rules)
+        if expected != self.revision { mask += 64 }
+        if triple_transition_mask(self.value,draft,self.rules,self.incident) != 0 {
+            mask += 128
+        }
+        (mask,self.revision+1,x,y)
+    }
+
+    // Fe owns the postcondition when the granted mutable access ends.
+    // The adapter cannot borrow private rules, incident or revision.
+    pub fn checked_edit(mut self,_ expected:u256) -> mut TripleDraft {
+        assert!(expected == self.revision)
+        let before = self.value
+        var candidate = before
+        yield mut candidate
+        assert!(triple_permanent_mask(candidate,self.rules) == 0)
+        assert!(triple_transition_mask(before,candidate,self.rules,self.incident) == 0)
+        if self.incident.phase == 1 {
+            let remaining = triple_deficits(candidate,self.rules,self.incident)
+            if remaining.0 == 0 && remaining.1 == 0 {
+                self.incident.phase = 2
+            }
+        }
+        self.value = candidate
+        self.revision += 1
+    }
+
+    pub fn commit(mut self,_ expected:u256,_ x:u256,_ y:u256,_ z:u256) -> u256 {
+        let draft = mut self.checked_edit(expected)
+        draft.x = x
+        draft.y = y
+        draft.z = z
+        self.version()
+    }
+
+    // Multi-setting operation: intermediate state may fail the predicate,
+    // but the final state must be valid at the compiler-controlled slide.
+    pub fn migrate(mut self,_ expected:u256,_ first:u256,_ first_value:u256,
+                   _ second:u256,_ second_value:u256) -> u256 {
+        assert!(first < 3 && second < 3 && first != second)
+        assert!(first_value <= INPUT_CEILING && second_value <= INPUT_CEILING)
+        let draft = mut self.checked_edit(expected)
+        triple_put(mut draft,first,first_value)
+        triple_put(mut draft,second,second_value)
+        self.version()
+    }
+
+    pub fn activate_progressive(mut self,_ expected:u256,_ market:u256,
+                                _ maximum:u256,_ buffer_min:u256) -> u256 {
+        assert!(self.incident.phase == 0 && expected == self.revision)
+        assert!(triple_spec_ok(self.rules,market,maximum,buffer_min))
+        let id = self.incident.id + 1
+        self.incident = TripleIncident {phase:1,id,market,maximum,buffer_min}
+        let current = triple_deficits(self.value,self.rules,self.incident)
+        if current.0 == 0 && current.1 == 0 { self.incident.phase = 2 }
+        self.revision += 1
+        self.revision
+    }
+
+    pub fn activate_contain(mut self,_ expected:u256,_ market:u256,
+                            _ maximum:u256,_ buffer_min:u256,
+                            _ x:u256,_ y:u256,_ z:u256) -> u256 {
+        assert!(self.incident.phase == 0 && expected == self.revision)
+        assert!(triple_spec_ok(self.rules,market,maximum,buffer_min))
+        let id = self.incident.id + 1
+        self.incident = TripleIncident {phase:2,id,market,maximum,buffer_min}
+        self.commit(expected,x,y,z)
+    }
+
+    pub fn release_bound(mut self,_ expected:u256,_ incident_id:u256) -> u256 {
+        assert!(self.incident.phase == 2)
+        assert!(expected == self.revision && incident_id == self.incident.id)
+        assert!(triple_permanent_mask(self.value,self.rules) == 0)
+        let remaining = triple_deficits(self.value,self.rules,self.incident)
+        assert!(remaining.0 == 0 && remaining.1 == 0)
+        self.incident.phase = 0
+        self.revision += 1
+        self.revision
+    }
+}
+
+#[test]
+fn p05_generic_library_governance_predicates() {
+    let config = TripleLimits { total:1000,reserve_floor:0,min_x:1,min_y:1,min_z:2,
+        cap_x:20,cap_y:20,cap_z:365,ratio_x_y:1,buffer_mode:1 }
+    let g = Guard3::new(x:5,y:9,z:2,config:config)
+    assert!(g.preview(1,10,9,2).0 == 8)
+    assert!(g.preview(1,5,9,1).0 == 16)
+    assert!(g.preview(1,5,9,2).0 == 0)
+    assert!(g.preview(0,5,9,2).0 == 64)
+}
+
+#[test]
+fn p05_generic_library_allocation_predicates() {
+    let config = TripleLimits { total:1000,reserve_floor:100,min_x:0,min_y:0,min_z:0,
+        cap_x:550,cap_y:500,cap_z:350,ratio_x_y:2,buffer_mode:0 }
+    var g = Guard3::new(x:400,y:300,z:100,config:config)
+    assert!(g.preview(1,560,300,0).0 == 2)
+    assert!(g.preview(1,400,450,150).0 == 4)
+    let step = g.commit(1,350,350,100)
+    assert!(step == 2)
+    let s = g.snapshot()
+    assert!(s.0 == 2 && s.1 == 350 && s.2 == 350 && s.3 == 100)
+}
+
+#[test]
+fn p05_generic_progressive_deficits_and_containment() {
+    let config = TripleLimits { total:1000,reserve_floor:100,min_x:0,min_y:0,min_z:0,
+        cap_x:550,cap_y:500,cap_z:350,ratio_x_y:2,buffer_mode:0 }
+    var g = Guard3::new(x:400,y:300,z:100,config:config)
+    assert!(g.activate_progressive(1,0,200,300) == 2)
+    assert!(g.deficits().0 == 200 && g.deficits().1 == 100)
+    assert!(g.preview(2,450,300,100).0 == 128)
+    assert!(g.commit(2,300,300,100) == 3)
+    assert!(g.deficits().0 == 100 && g.deficits().1 == 0)
+    assert!(g.commit(3,200,300,100) == 4)
+    assert!(g.incident_snapshot().0 == 2)
+    assert!(g.release_bound(4,1) == 5)
+    assert!(g.incident_snapshot().0 == 0)
+}

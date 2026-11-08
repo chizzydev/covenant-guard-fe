@@ -1,0 +1,243 @@
+// P05 generic allocation pilot: exact same Guard3 type used by governance.
+// DIFFERENT active constraints (budget reserve/2x paired exposure vs membership).
+// P04 flagship AllocationKernel remains separate and is still regression-tested.
+use std::abi::sol
+use std::evm::{Address, Ctx, Evm, Call}
+use covenant_transition::{Guard3,TripleLimits}
+
+msg PilotMsg {
+    #[selector = sol("snapshot()")]
+    Snapshot -> (u256,u256,u256,u256),
+    #[selector = sol("incidentSnapshot()")]
+    IncidentSnapshot -> (u256,u256,u256,u256,u256),
+    #[selector = sol("deficits()")]
+    Deficits -> (u256,u256),
+    #[selector = sol("preview(uint256,uint256,uint256,uint256)")]
+    Preview {expected:u256,a:u256,b:u256,c:u256} -> (u256,u256,u256,u256),
+    #[selector = sol("setAllocation(uint256,uint256,uint256,uint256)")]
+    SetAllocation {expected:u256,a:u256,b:u256,c:u256,
+    } -> u256,
+    #[selector = sol("reallocate(uint256,uint256,uint256,uint256,uint256)")]
+    Reallocate {expected:u256,first:u256,first_value:u256,second:u256,
+                second_value:u256,
+    } -> u256,
+    #[selector = sol("activateRecovery(uint256,uint256,uint256,uint256)")]
+    ActivateRecovery {expected:u256,market:u256,maximum:u256,reserve_min:u256} -> u256,
+    #[selector = sol("activateAtomicRecovery(uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    ActivateAtomicRecovery {expected:u256,market:u256,maximum:u256,reserve_min:u256,
+                            a:u256,b:u256,c:u256,
+    } -> u256,
+    #[selector = sol("releaseRecovery(uint256,uint256)")]
+    ReleaseRecovery {expected:u256,incident_id:u256} -> u256,
+    #[selector = sol("guardian()")]
+    Guardian -> Address,
+    #[selector = sol("operator()")]
+    Operator -> Address,
+}
+
+pub contract AllocationPilot uses (ctx:Ctx) {
+    mut operator:Address,
+    mut guardian:Address,
+    mut engine:Guard3,
+
+    init(guardian_address:Address) uses (ctx,mut operator,mut guardian,mut engine) {
+        assert!(guardian_address != ctx.caller())
+        assert!(guardian_address != Address::zero())
+        operator = ctx.caller()
+        guardian = guardian_address
+        // Core<=2*Support; cap each; 1000 total and 100 unspent reserve.
+        // Emergency buffer is free budget, NOT governance delay field z.
+        let rules = TripleLimits {total:1000,reserve_floor:100,
+            min_x:0,min_y:0,min_z:0,cap_x:550,cap_y:500,cap_z:350,
+            ratio_x_y:2,buffer_mode:0}
+        engine = Guard3::new(x:400,y:300,z:100,config:rules)
+    }
+
+    recv PilotMsg {
+        Snapshot -> (u256,u256,u256,u256) uses (engine) {engine.snapshot()}
+        IncidentSnapshot -> (u256,u256,u256,u256,u256) uses (engine) {
+            engine.incident_snapshot()
+        }
+        Deficits -> (u256,u256) uses (engine) {engine.deficits()}
+        Preview {expected,a,b,c} -> (u256,u256,u256,u256) uses (engine) {
+            engine.preview(expected,a,b,c)
+        }
+        SetAllocation {expected,a,b,c} -> u256 uses (operator,mut engine,ctx) {
+            assert!(ctx.caller() == operator)
+            engine.commit(expected,a,b,c)
+        }
+        Reallocate {expected,first,first_value,second,second_value} -> u256
+            uses (operator,mut engine,ctx) {
+            assert!(ctx.caller() == operator)
+            engine.migrate(expected,first,first_value,second,second_value)
+        }
+        ActivateRecovery {expected,market,maximum,reserve_min} -> u256
+            uses (guardian,mut engine,ctx) {
+            assert!(ctx.caller() == guardian)
+            engine.activate_progressive(expected,market,maximum,reserve_min)
+        }
+        ActivateAtomicRecovery {expected,market,maximum,reserve_min,a,b,c} -> u256
+            uses (guardian,mut engine,ctx) {
+            assert!(ctx.caller() == guardian)
+            engine.activate_contain(expected,market,maximum,reserve_min,a,b,c)
+        }
+        ReleaseRecovery {expected,incident_id} -> u256
+            uses (guardian,mut engine,ctx) {
+            assert!(ctx.caller() == guardian)
+            engine.release_bound(expected,incident_id)
+        }
+        Guardian -> Address uses (guardian) {guardian}
+        Operator -> Address uses (operator) {operator}
+    }
+}
+
+// Deliberately open test-only forwarder; real deployments need authenticated guardian.
+msg PilotGuardianMsg {
+    #[selector = sol("start(address,uint256,uint256,uint256,uint256)")]
+    Start {target:Address,version:u256,market:u256,maximum:u256,reserve:u256} -> bool,
+    #[selector = sol("startAtomic(address,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    StartAtomic {target:Address,version:u256,market:u256,maximum:u256,reserve:u256,
+                 a:u256,b:u256,c:u256,
+    } -> bool,
+    #[selector = sol("release(address,uint256,uint256)")]
+    Release {target:Address,version:u256,id:u256} -> bool,
+    #[selector = sol("rogueWrite(address,uint256,uint256,uint256,uint256)")]
+    RogueWrite {target:Address,version:u256,a:u256,b:u256,c:u256,
+    } -> bool,
+}
+
+pub contract PilotGuardianFixture uses (call:mut Call) {
+    recv PilotGuardianMsg {
+        Start {target,version,market,maximum,reserve} -> bool uses (mut call) {
+            let r = call.try_call(addr:target,gas:1500000,value:Wei::zero(),
+                message:PilotMsg::ActivateRecovery {expected:version,market,
+                    maximum,reserve_min:reserve})
+            r.success()
+        }
+        StartAtomic {target,version,market,maximum,reserve,a,b,c} -> bool uses (mut call) {
+            let r = call.try_call(addr:target,gas:1500000,value:Wei::zero(),
+                message:PilotMsg::ActivateAtomicRecovery {expected:version,
+                    market,maximum,reserve_min:reserve,a,b,c})
+            r.success()
+        }
+        Release {target,version,id} -> bool uses (mut call) {
+            let r = call.try_call(addr:target,gas:1500000,value:Wei::zero(),
+                message:PilotMsg::ReleaseRecovery {expected:version,incident_id:id})
+            r.success()
+        }
+        RogueWrite {target,version,a,b,c} -> bool uses (mut call) {
+            let r = call.try_call(addr:target,gas:1500000,value:Wei::zero(),
+                message:PilotMsg::SetAllocation {expected:version,a,b,c})
+            r.success()
+        }
+    }
+}
+
+#[test]
+fn p05_pilot_permanent_rules_and_version() uses (evm:mut Evm) {
+    let g = evm.create2<PilotGuardianFixture>(value:Wei::zero(),args:(),salt:7101)
+    let c = evm.create2<AllocationPilot>(value:Wei::zero(),args:(g,),salt:7102)
+    let bad = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:PilotMsg::SetAllocation {expected:1,a:560,b:300,c:0})
+    assert!(!bad.success())
+    let over_reserve = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:PilotMsg::SetAllocation {expected:1,a:400,b:450,c:150})
+    assert!(!over_reserve.success())
+    let v:u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:PilotMsg::SetAllocation {expected:1,a:350,b:350,c:100})
+    assert!(v == 2)
+    let stale = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:PilotMsg::SetAllocation {expected:1,a:350,b:350,c:100})
+    assert!(!stale.success())
+    let s:(u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:PilotMsg::Snapshot {})
+    assert!(s.0 == 2 && s.1 == 350 && s.2 == 350 && s.3 == 100)
+}
+
+#[test]
+fn p05_pilot_migration_finalization_and_preview() uses (evm:mut Evm) {
+    let g = evm.create2<PilotGuardianFixture>(value:Wei::zero(),args:(),salt:7103)
+    let c = evm.create2<AllocationPilot>(value:Wei::zero(),args:(g,),salt:7104)
+    let p:(u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:PilotMsg::Preview {expected:1,a:350,b:350,c:100})
+    assert!(p.0 == 0 && p.1 == 2)
+    let v:u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:PilotMsg::Reallocate {expected:1,first:1,first_value:350,
+            second:0,second_value:350})
+    assert!(v == 2)
+    let fail = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:PilotMsg::Reallocate {expected:2,first:1,first_value:100,
+            second:0,second_value:500})
+    assert!(!fail.success())
+    let s:(u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:PilotMsg::Snapshot {})
+    assert!(s.0 == 2 && s.1 == 350 && s.2 == 350 && s.3 == 100)
+}
+
+#[test]
+fn p05_pilot_progressive_and_recovery() uses (evm:mut Evm) {
+    let g = evm.create2<PilotGuardianFixture>(value:Wei::zero(),args:(),salt:7105)
+    let c = evm.create2<AllocationPilot>(value:Wei::zero(),args:(g,),salt:7106)
+    let ok:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:PilotGuardianMsg::Start {target:c,version:1,market:0,
+            maximum:200,reserve:300})
+    assert!(ok)
+    let first:(u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:PilotMsg::Deficits {})
+    assert!(first.0 == 200 && first.1 == 100)
+    let v:u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:PilotMsg::SetAllocation {expected:2,a:300,b:300,c:100})
+    assert!(v == 3)
+    let mid:(u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:PilotMsg::Deficits {})
+    assert!(mid.0 == 100 && mid.1 == 0)
+    let bad = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:PilotMsg::SetAllocation {expected:3,a:350,b:300,c:100})
+    assert!(!bad.success())
+    let trade = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:PilotMsg::SetAllocation {expected:3,a:250,b:400,c:100})
+    assert!(!trade.success())
+    let alternate = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:PilotMsg::Reallocate {expected:3,first:1,first_value:400,
+            second:0,second_value:250})
+    assert!(!alternate.success())
+    let finish:u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:PilotMsg::SetAllocation {expected:3,a:200,b:300,c:100})
+    assert!(finish == 4)
+    let inc:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:PilotMsg::IncidentSnapshot {})
+    assert!(inc.0 == 2 && inc.1 == 1)
+    let revert = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:PilotMsg::SetAllocation {expected:4,a:250,b:300,c:100})
+    assert!(!revert.success())
+    let released:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:PilotGuardianMsg::Release {target:c,version:4,id:1})
+    assert!(released)
+}
+
+#[test]
+fn p05_pilot_atomic_unauthorized_rollback() uses (evm:mut Evm) {
+    let g = evm.create2<PilotGuardianFixture>(value:Wei::zero(),args:(),salt:7107)
+    let c = evm.create2<AllocationPilot>(value:Wei::zero(),args:(g,),salt:7108)
+    let unauthorized = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:PilotMsg::ActivateRecovery {expected:1,market:0,
+            maximum:200,reserve_min:300})
+    assert!(!unauthorized.success())
+    let failed:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:PilotGuardianMsg::StartAtomic {target:c,version:1,
+            market:0,maximum:200,reserve:300,a:350,b:300,c:100})
+    assert!(!failed)
+    let s:(u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:PilotMsg::Snapshot {})
+    assert!(s.0 == 1 && s.1 == 400)
+    let good:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:PilotGuardianMsg::StartAtomic {target:c,version:1,
+            market:0,maximum:200,reserve:300,a:200,b:300,c:100})
+    assert!(good)
+    let inc:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:PilotMsg::IncidentSnapshot {})
+    assert!(inc.0 == 2 && inc.1 == 1)
+    let unauthorized_write:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:PilotGuardianMsg::RogueWrite {target:c,version:2,a:200,b:350,c:100})
+    assert!(!unauthorized_write)
+}

@@ -1,0 +1,28 @@
+// Root ingot: third independent adoption smoke for the shared Fe package.
+// The reusable implementation lives ONLY in library/covenant_transition.
+// The real applications are consumers/allocation_flagship and
+// consumers/governance_registry. This root shows Fe can resolve the local
+// package from the top-level entrypoint without copying its source.
+use covenant_transition::TripleLimits
+
+pub fn example_guard_policy() -> TripleLimits {
+    TripleLimits {
+        total: 1000,
+        reserve_floor: 100,
+        min_x: 0,
+        min_y: 0,
+        min_z: 0,
+        cap_x: 550,
+        cap_y: 500,
+        cap_z: 350,
+        ratio_x_y: 2,
+        buffer_mode: 0,
+    }
+}
+
+#[test]
+fn root_ingot_dependency_resolves() {
+    let policy = example_guard_policy()
+    assert!(policy.total == 1000)
+    assert!(policy.ratio_x_y == 2)
+}

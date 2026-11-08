@@ -1,0 +1,15 @@
+{
+  "library/covenant_transition/src/lib.fe": "6b8ecc4aa9a134e4f8bb7be62ae3d8ac708c7b2498bf28d755bfafd1ea76fffb",
+  "consumers/allocation_flagship/src/lib.fe": "da9380df00fe04d7cf792c8f8af7abedbc24c460aea1dff1ac8a6ff0ee24a03c",
+  "app/flagship-runtime.mjs": "b5e0adaa25db9f2274d1a3aa2c210fb5c060356e00c4a4f88190b10292c0280a",
+  "app/server.mjs": "0a52e125e6bb6ea439272816f931be208c6afc60bd4cdc1c75a0b5fc18cd5c4d",
+  "app/guard-api.mjs": "0b66a56ff390e6318ced2e325363865e159613750b1bd709b4c03d0b2d9d768f",
+  "app/public/client.js": "077baef7d2ef753878c89dbcf8d55ffd9ef10f8f96d1202c9932279a13f48d43",
+  "app/public/index.html": "dd32bea35cbfdd340d615213cf544801571eaeb30e26e2224c3d710e5140ea6b",
+  "app/lib/planner.mjs": "5135bfb880cfdd5796851f78106b5c23d7352f84da36dc010a459ae719080317",
+  "app/lib/incident.mjs": "9177b5b0a5dc90fa33982b9a8be9a39897b0053f092bf73a06c5ce2d32880fa5",
+  "app/lib/audit.mjs": "b0710306d740469b497cc07fcf3a61fffd8042edd5c3710b449705bfbb507466",
+  "app/tests/flagship-cutover.test.mjs": "2aa3572f15772a88dbb14ff80d98046b00bbdabb97ea5881cfda3df6b72848cc",
+  "scripts/p06_r4_verify.mjs": "a4736a6969c9e32d4715e86724ecb0af5cb67bb220ca9dd6bdcb4c1c6bbb495d",
+  "package-lock.json": "7abe99458257ccfe90c3427f282353d2d23a444f2f88a2c4d1be42c81dfcf3ef"
+}

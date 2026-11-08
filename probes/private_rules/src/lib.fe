@@ -1,0 +1,7 @@
+// Must fail to compile: rules cannot be changed from a consumer.
+use covenant_transition::Guarded
+fn illegal_rules_write() {
+    var g = Guarded::new(a:400,b:300,c:100,budget:1000,reserve_floor:100,
+                         cap_a:550,cap_b:500,cap_c:350)
+    g.rules.budget = 200000
+}

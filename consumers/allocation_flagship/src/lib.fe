@@ -1,0 +1,302 @@
+// P06-R3: integrated flagship *candidate* backed by ONE private Guard3.
+// The old P04 consumer and P05 consumers remain unchanged regression controls.
+// Every application mutator is guarded at the same Fe checked_edit boundary.
+// Owner contract prohibits whole-wrapper replacement after init.
+// No production custody, no real authentication in the HTTP demo.
+use std::abi::sol
+use std::evm::{Address, Ctx, Evm, Call}
+use covenant_transition::{Guard3, TripleLimits}
+
+msg FlagshipMsg {
+    #[selector = sol("snapshot()")]
+    Snapshot -> (u256,u256,u256,u256,u256,u256,u256,u256,u256),
+    #[selector = sol("operator()")]
+    Operator -> Address,
+    #[selector = sol("guardian()")]
+    Guardian -> Address,
+    #[selector = sol("policyConstants()")]
+    PolicyConstants -> (u256,u256),
+    #[selector = sol("canCommit()")]
+    CanCommit -> bool,
+    #[selector = sol("incidentSnapshot()")]
+    IncidentSnapshot -> (u256,u256,u256,u256,u256),
+    #[selector = sol("incidentDeficits()")]
+    IncidentDeficits -> (u256,u256),
+    #[selector = sol("preview(uint256,uint256,uint256,uint256)")]
+    Preview {expected_version:u256,a:u256,b:u256,c:u256} -> (u256,u256,u256,u256),
+    #[selector = sol("commit(uint256,uint256,uint256,uint256)")]
+    Commit {expected_version:u256,a:u256,b:u256,c:u256} -> u256,
+    #[selector = sol("previewMigration(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    PreviewMigration {expected_version:u256,count:u256,
+        m1:u256,v1:u256,m2:u256,v2:u256,m3:u256,v3:u256,
+    } -> (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256),
+    #[selector = sol("commitMigration(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    CommitMigration {expected_version:u256,count:u256,
+        m1:u256,v1:u256,m2:u256,v2:u256,m3:u256,v3:u256,
+    } -> u256,
+    #[selector = sol("previewActions(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    PreviewActions {expected_version:u256,count:u256,
+        o1:u256,n1:u256,o2:u256,n2:u256,o3:u256,n3:u256,
+    } -> (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256,u256),
+    #[selector = sol("commitActions(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    CommitActions {expected_version:u256,count:u256,
+        o1:u256,n1:u256,o2:u256,n2:u256,o3:u256,n3:u256,
+    } -> u256,
+    #[selector = sol("commitGoalActions(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    CommitGoalActions {expected_version:u256,count:u256,
+        o1:u256,n1:u256,o2:u256,n2:u256,o3:u256,n3:u256,
+        target_a:u256,target_b:u256,target_c:u256,
+    } -> u256,
+    #[selector = sol("previewIncidentActions(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    PreviewIncidentActions {expected_version:u256,count:u256,
+        o1:u256,n1:u256,o2:u256,n2:u256,o3:u256,n3:u256,
+        target_a:u256,target_b:u256,target_c:u256,
+        incident_market:u256,exposure_max:u256,reserve_min:u256,
+    } -> (u256,u256,u256,bool,u256,u256,u256),
+    #[selector = sol("commitIncidentActions(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    CommitIncidentActions {expected_version:u256,count:u256,
+        o1:u256,n1:u256,o2:u256,n2:u256,o3:u256,n3:u256,
+        target_a:u256,target_b:u256,target_c:u256,
+        incident_market:u256,exposure_max:u256,reserve_min:u256,
+    } -> u256,
+    #[selector = sol("activateProgressive(uint256,uint256,uint256,uint256)")]
+    ActivateProgressive {expected_version:u256,incident_market:u256,
+        exposure_max:u256,reserve_min:u256} -> u256,
+    #[selector = sol("activateContain(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    ActivateContain {expected_version:u256,incident_market:u256,
+        exposure_max:u256,reserve_min:u256,count:u256,
+        o1:u256,n1:u256,o2:u256,n2:u256,o3:u256,n3:u256,
+        target_a:u256,target_b:u256,target_c:u256,
+    } -> u256,
+    // Deliberately NO unbound releaseIncident(uint256) public selector.
+    #[selector = sol("releaseIncidentBound(uint256,uint256)")]
+    ReleaseIncidentBound {expected_version:u256,incident_id:u256} -> u256,
+}
+
+pub contract AllocationFlagship uses (ctx:Ctx) {
+    mut operator:Address,
+    mut guardian:Address,
+    mut engine:Guard3,
+
+    init(guardian_address:Address) uses (ctx,mut operator,mut guardian,mut engine) {
+        assert!(guardian_address != ctx.caller())
+        assert!(guardian_address != Address::zero())
+        operator = ctx.caller()
+        guardian = guardian_address
+        let config = TripleLimits {total:1000,reserve_floor:100,
+            min_x:0,min_y:0,min_z:0,cap_x:550,cap_y:500,cap_z:350,
+            ratio_x_y:2,buffer_mode:0}
+        engine = Guard3::new(x:400,y:300,z:100,config:config)
+    }
+
+    recv FlagshipMsg {
+        Snapshot -> (u256,u256,u256,u256,u256,u256,u256,u256,u256) uses (engine) {
+            engine.flagship_snapshot()
+        }
+        Operator -> Address uses (operator) {operator}
+        Guardian -> Address uses (guardian) {guardian}
+        PolicyConstants -> (u256,u256) uses (engine) {engine.rule_constants()}
+        CanCommit -> bool uses (operator,ctx) {ctx.caller() == operator}
+        IncidentSnapshot -> (u256,u256,u256,u256,u256) uses (engine) {
+            engine.incident_snapshot()
+        }
+        IncidentDeficits -> (u256,u256) uses (engine) {engine.deficits()}
+        Preview {expected_version,a,b,c} -> (u256,u256,u256,u256) uses (engine) {
+            engine.preview_flagship(expected_version,a,b,c)
+        }
+        Commit {expected_version,a,b,c} -> u256 uses (operator,ctx,mut engine) {
+            assert!(ctx.caller() == operator)
+            engine.commit(expected_version,a,b,c)
+        }
+        PreviewMigration {expected_version,count,m1,v1,m2,v2,m3,v3}
+            -> (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256) uses (engine) {
+            engine.preview_migration(expected_version,count,m1,v1,m2,v2,m3,v3)
+        }
+        CommitMigration {expected_version,count,m1,v1,m2,v2,m3,v3} -> u256
+            uses (operator,ctx,mut engine) {
+            assert!(ctx.caller() == operator)
+            engine.commit_migration(expected_version,count,m1,v1,m2,v2,m3,v3)
+        }
+        PreviewActions {expected_version,count,o1,n1,o2,n2,o3,n3}
+            -> (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256,u256) uses (engine) {
+            engine.preview_ordered(expected_version,count,o1,n1,o2,n2,o3,n3)
+        }
+        CommitActions {expected_version,count,o1,n1,o2,n2,o3,n3} -> u256
+            uses (operator,ctx,mut engine) {
+            assert!(ctx.caller() == operator)
+            engine.commit_ordered(expected_version,count,o1,n1,o2,n2,o3,n3)
+        }
+        CommitGoalActions {expected_version,count,o1,n1,o2,n2,o3,n3,
+                           target_a,target_b,target_c} -> u256 uses (operator,ctx,mut engine) {
+            assert!(ctx.caller() == operator)
+            engine.commit_goal_ordered(expected_version,count,o1,n1,o2,n2,o3,n3,
+                target_a,target_b,target_c)
+        }
+        PreviewIncidentActions {expected_version,count,o1,n1,o2,n2,o3,n3,
+            target_a,target_b,target_c,incident_market,exposure_max,reserve_min}
+            -> (u256,u256,u256,bool,u256,u256,u256) uses (engine) {
+            engine.preview_incident_ordered(expected_version,count,o1,n1,o2,n2,o3,n3,
+                target_a,target_b,target_c,incident_market,exposure_max,reserve_min)
+        }
+        CommitIncidentActions {expected_version,count,o1,n1,o2,n2,o3,n3,
+            target_a,target_b,target_c,incident_market,exposure_max,reserve_min}
+            -> u256 uses (operator,ctx,mut engine) {
+            assert!(ctx.caller() == operator)
+            engine.commit_incident_ordered(expected_version,count,o1,n1,o2,n2,o3,n3,
+                target_a,target_b,target_c,incident_market,exposure_max,reserve_min)
+        }
+        ActivateProgressive {expected_version,incident_market,exposure_max,reserve_min}
+            -> u256 uses (guardian,ctx,mut engine) {
+            assert!(ctx.caller() == guardian)
+            engine.activate_progressive(expected_version,incident_market,
+                exposure_max,reserve_min)
+        }
+        ActivateContain {expected_version,incident_market,exposure_max,reserve_min,
+            count,o1,n1,o2,n2,o3,n3,target_a,target_b,target_c}
+            -> u256 uses (guardian,ctx,mut engine) {
+            assert!(ctx.caller() == guardian)
+            engine.activate_ordered_contain(expected_version,incident_market,
+                exposure_max,reserve_min,count,o1,n1,o2,n2,o3,n3,
+                target_a,target_b,target_c)
+        }
+        ReleaseIncidentBound {expected_version,incident_id} -> u256
+            uses (guardian,ctx,mut engine) {
+            assert!(ctx.caller() == guardian)
+            engine.release_bound(expected_version,incident_id)
+        }
+    }
+}
+
+// Testing-only guardian forwarder, intentionally NOT deployed by any app.
+msg FlagshipGuardianTestMsg {
+    #[selector = sol("start(address,uint256,uint256,uint256,uint256)")]
+    Start {target:Address,expected:u256,market:u256,maximum:u256,reserve:u256} -> bool,
+    #[selector = sol("contain(address,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    Contain {target:Address,expected:u256,market:u256,maximum:u256,reserve:u256,
+             opcode:u256,amount:u256,a:u256,b:u256,c:u256} -> bool,
+    #[selector = sol("release(address,uint256,uint256)")]
+    Release {target:Address,expected:u256,id:u256} -> bool,
+}
+
+pub contract FlagshipGuardianFixture uses (call:mut Call) {
+    recv FlagshipGuardianTestMsg {
+        Start {target,expected,market,maximum,reserve} -> bool uses (mut call) {
+            let r = call.try_call(addr:target,gas:2200000,value:Wei::zero(),
+                message:FlagshipMsg::ActivateProgressive {
+                    expected_version:expected,incident_market:market,
+                    exposure_max:maximum,reserve_min:reserve})
+            r.success()
+        }
+        Contain {target,expected,market,maximum,reserve,opcode,amount,a,b,c}
+            -> bool uses (mut call) {
+            let r = call.try_call(addr:target,gas:2200000,value:Wei::zero(),
+                message:FlagshipMsg::ActivateContain {
+                    expected_version:expected,incident_market:market,
+                    exposure_max:maximum,reserve_min:reserve,count:1,
+                    o1:opcode,n1:amount,o2:0,n2:0,o3:0,n3:0,
+                    target_a:a,target_b:b,target_c:c})
+            r.success()
+        }
+        Release {target,expected,id} -> bool uses (mut call) {
+            let r = call.try_call(addr:target,gas:2200000,value:Wei::zero(),
+                message:FlagshipMsg::ReleaseIncidentBound {
+                    expected_version:expected,incident_id:id})
+            r.success()
+        }
+    }
+}
+
+#[test]
+fn p06_flagship_ordered_plan_and_single_revision() uses (evm:mut Evm) {
+    let g = evm.create2<FlagshipGuardianFixture>(value:Wei::zero(),args:(),salt:8601)
+    let c = evm.create2<AllocationFlagship>(value:Wei::zero(),args:(g,),salt:8602)
+    let preview:(u256,u256,u256,u256,u256,u256,u256,u256,u256,u256,u256) =
+        evm.call(addr:c,gas:1500000,value:Wei::zero(),message:FlagshipMsg::PreviewActions {
+            expected_version:1,count:3,o1:9,n1:250,o2:13,n2:250,o3:3,n3:100})
+    assert!(preview.0 == 0 && preview.1 == 2 && preview.4 == 0)
+    assert!(preview.5 == 2 && preview.6 == 0 && preview.10 == 0)
+    assert!(preview.7 == 250 && preview.8 == 450 && preview.9 == 100)
+    let version:u256 = evm.call(addr:c,gas:1500000,value:Wei::zero(),
+        message:FlagshipMsg::CommitGoalActions {expected_version:1,count:3,
+            o1:9,n1:250,o2:13,n2:250,o3:3,n3:100,
+            target_a:250,target_b:450,target_c:100})
+    assert!(version == 2)
+    let snap:(u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:FlagshipMsg::Snapshot {})
+    assert!(snap.0 == 2 && snap.1 == 250 && snap.2 == 450 && snap.3 == 100)
+    assert!(snap.4 == 1000 && snap.5 == 100 && snap.6 == 550)
+}
+
+#[test]
+fn p06_flagship_reordering_rejected_and_unauthorized_denied() uses (evm:mut Evm) {
+    let g = evm.create2<FlagshipGuardianFixture>(value:Wei::zero(),args:(),salt:8603)
+    let c = evm.create2<AllocationFlagship>(value:Wei::zero(),args:(g,),salt:8604)
+    let p:(u256,u256,u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:FlagshipMsg::PreviewActions {
+            expected_version:1,count:3,o1:13,n1:250,o2:9,n2:250,o3:3,n3:100})
+    assert!(p.0 == 256 && p.10 == 21)
+    let denied = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:FlagshipMsg::CommitActions {expected_version:1,count:3,
+            o1:13,n1:250,o2:9,n2:250,o3:3,n3:100})
+    assert!(!denied.success())
+    let guardian_blocked:bool = evm.call(addr:g,gas:1700000,value:Wei::zero(),
+        message:FlagshipGuardianTestMsg::Contain {target:c,expected:1,market:0,
+            maximum:200,reserve:300,opcode:9,amount:100,a:300,b:300,c:100})
+    // Target is still over the maximum; revert must include the incident metadata.
+    assert!(!guardian_blocked)
+    let state:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:FlagshipMsg::IncidentSnapshot {})
+    assert!(state.0 == 0 && state.1 == 0)
+}
+
+#[test]
+fn p06_flagship_progressive_protects_ordered_routes() uses (evm:mut Evm) {
+    let g = evm.create2<FlagshipGuardianFixture>(value:Wei::zero(),args:(),salt:8605)
+    let c = evm.create2<AllocationFlagship>(value:Wei::zero(),args:(g,),salt:8606)
+    let ok:bool = evm.call(addr:g,gas:1900000,value:Wei::zero(),
+        message:FlagshipGuardianTestMsg::Start {target:c,expected:1,
+            market:0,maximum:200,reserve:300})
+    assert!(ok)
+    let denied = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:FlagshipMsg::CommitActions {expected_version:2,count:1,
+            o1:15,n1:400,o2:0,n2:0,o3:0,n3:0})
+    assert!(!denied.success())
+    let first:u256 = evm.call(addr:c,gas:1500000,value:Wei::zero(),
+        message:FlagshipMsg::CommitActions {expected_version:2,count:1,
+            o1:9,n1:100,o2:0,n2:0,o3:0,n3:0})
+    assert!(first == 3)
+    let worse = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:FlagshipMsg::CommitMigration {expected_version:3,count:1,
+            m1:0,v1:350,m2:0,v2:0,m3:0,v3:0})
+    assert!(!worse.success())
+    let second:u256 = evm.call(addr:c,gas:1500000,value:Wei::zero(),
+        message:FlagshipMsg::CommitActions {expected_version:3,count:1,
+            o1:9,n1:100,o2:0,n2:0,o3:0,n3:0})
+    assert!(second == 4)
+    let state:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:FlagshipMsg::IncidentSnapshot {})
+    assert!(state.0 == 2 && state.1 == 1)
+    let held = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:FlagshipMsg::Commit {expected_version:4,a:250,b:300,c:100})
+    assert!(!held.success())
+    let wrong_release:bool = evm.call(addr:g,gas:1500000,value:Wei::zero(),
+        message:FlagshipGuardianTestMsg::Release {target:c,expected:4,id:99})
+    assert!(!wrong_release)
+    let released:bool = evm.call(addr:g,gas:1500000,value:Wei::zero(),
+        message:FlagshipGuardianTestMsg::Release {target:c,expected:4,id:1})
+    assert!(released)
+}
+
+#[test]
+fn p06_flagship_bad_exact_goal_full_rollback() uses (evm:mut Evm) {
+    let g = evm.create2<FlagshipGuardianFixture>(value:Wei::zero(),args:(),salt:8607)
+    let c = evm.create2<AllocationFlagship>(value:Wei::zero(),args:(g,),salt:8608)
+    let bad = evm.try_call(addr:c,gas:1400000,value:Wei::zero(),
+        message:FlagshipMsg::CommitGoalActions {expected_version:1,count:1,
+            o1:9,n1:100,o2:0,n2:0,o3:0,n3:0,
+            target_a:350,target_b:300,target_c:100})
+    assert!(!bad.success())
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:FlagshipMsg::Snapshot {})
+    assert!(s.0 == 1 && s.1 == 400 && s.2 == 300 && s.3 == 100)
+}

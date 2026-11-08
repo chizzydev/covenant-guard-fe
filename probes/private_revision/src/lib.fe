@@ -1,0 +1,7 @@
+// Must fail to compile: revision is not public in the Fe ingot.
+use covenant_transition::Guarded
+fn illegal_revision_access() -> u256 {
+    let g = Guarded::new(a:400,b:300,c:100,budget:1000,reserve_floor:100,
+                         cap_a:550,cap_b:500,cap_c:350)
+    g.revision
+}

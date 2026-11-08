@@ -1,0 +1,34 @@
+// EXPECTED COMPILE FAILURE. Tests overlapping storage access vs reentrant call.
+use std::evm::{Address, Call}
+use core::ptr::{MemBuffer, MemSpan}
+
+struct Guarded { value: u256 }
+impl Guarded {
+    fn edit(mut self) -> mut u256 {
+        var proposed = self.value
+        yield mut proposed
+        self.value = proposed
+    }
+}
+msg DangerMsg {
+    #[selector = 0x12345678]
+    Dangerous { target: Address },
+}
+pub contract IllegalCall {
+    mut guard: Guarded,
+    recv DangerMsg {
+        Dangerous { target } uses (mut guard, call: mut Call) {
+            let x = mut guard.edit()
+            x = 2
+            var output = MemBuffer::empty()
+            let outcome = call.raw_call(
+                addr: target,
+                gas: 100000,
+                value: Wei::zero(),
+                args: MemSpan::empty(),
+                ret: mut output,
+            )
+            x = 3
+        }
+    }
+}

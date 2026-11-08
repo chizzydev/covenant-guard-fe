@@ -1,0 +1,45 @@
+{
+  "version": "1.8.0",
+  "mode": "independent in-memory Fe EVM witness",
+  "feContractSha256": "3b98628a9ead95cf271cee86c62f0d20e88398314ac6ac62dc1ae717a1b7286d",
+  "compiler": "Fe 26.5.0 required; see verification log",
+  "original": {
+    "version": "1",
+    "a": "400",
+    "b": "300",
+    "c": "100"
+  },
+  "ordinaryPolicyValidButIncidentRejected": {
+    "ordinaryMask": 0,
+    "incidentMask": 1,
+    "reverted": true
+  },
+  "reserveAttestationRejected": {
+    "incidentMask": 2,
+    "reverted": true
+  },
+  "wrongExactTargetRejected": true,
+  "reviewerRejected": true,
+  "committed": {
+    "target": {
+      "a": "200",
+      "b": "300",
+      "c": "100"
+    },
+    "actual": {
+      "version": "2",
+      "a": "200",
+      "b": "300",
+      "c": "100"
+    },
+    "txHash": "0x9b09c1933f3b7c430cb96bea9d0f8a6d748d326d7886d3bcdc2daae7438d6fa2",
+    "gasUsed": "52442"
+  },
+  "staleVersionRejected": true,
+  "warnings": [
+    "Test account is disposable; no real credentials",
+    "EVM state is in memory",
+    "No live oracle, external risk feed, or public blockchain",
+    "No production security assurance"
+  ]
+}

@@ -1,0 +1,11 @@
+# Never commit local EVM traces, intentionally vulnerable generated mutants,
+# local development keys/artifacts, or npm installation state.
+node_modules/
+artifacts/
+results/
+__pycache__/
+*.pyc
+*.log
+.env
+.env.*
+!.env.example

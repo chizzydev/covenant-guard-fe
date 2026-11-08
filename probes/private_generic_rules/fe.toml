@@ -1,0 +1,6 @@
+[ingot]
+name = "p05_negative_generic_rules"
+version = "0.1.0"
+
+[dependencies]
+covenant_transition = { path = "../../library/covenant_transition" }

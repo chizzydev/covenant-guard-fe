@@ -1,0 +1,21 @@
+# Preserve byte-for-byte LF source identity across Windows, Linux and CI.
+* text=auto
+*.fe text eol=lf
+*.mjs text eol=lf
+*.js text eol=lf
+*.py text eol=lf
+*.ps1 text eol=lf
+*.sh text eol=lf
+*.toml text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.txt text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.ico binary
+*.png binary
+*.bin binary
+*.zip binary
+# Owner's original CRLF transcript must retain its exact bytes for evidence checks.
+evidence/P07_OWNER_REPORTED_RUN_2026-11-08.txt -text

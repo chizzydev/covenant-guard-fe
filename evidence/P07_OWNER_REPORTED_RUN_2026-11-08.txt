@@ -1,0 +1,637 @@
+=== COVENANT GUARD P07-R2 ===
+ZIP_SHA256=PASS
+EXTRACTION=PASS
+ADMIN_REQUIRED=NO
+PUBLIC_CHAIN=NO
+REAL_FUNDS=NONE
+PUBLIC_GITHUB_MUTATION=NONE
+P07_DISPATCH_BASELINE_FIRST=YES
+STAGE=P07_P06_R4_BASELINE_FULL_REPLAY
+ADMIN_REQUIRED=NO
+REAL_FUNDS=NONE
+PUBLIC_CHAIN=NO
+PUBLIC_GITHUB_MUTATION=NONE
+NETWORK_REQUIRED=ONLY_IF_LOCKED_NPM_PACKAGES_NOT_INSTALLED
+P05_R1_OWNER_VERIFIED=YES
+P06_NODE_SUMMARY_PARSER=PASS
+P06_MANIFEST_FILES_VERIFIED=90
+P06_P05_KERNEL_EXTENDED_WITH_ORDERED_API=YES
+P06_P04_GUARDED_PREFIX_IDENTICAL=PASS
+STAGE=P06_FE_VERSION
+fe 26.5.0 (3dab95f)
+P06_FE_VERSION_EXIT=0
+P06_FE_VERSION=PASS
+P06_PINNED_FE=PASS
+P06_NODE_VERSION=v24.13.0
+STAGE=P06_STATIC_VERIFY
+P06_R3_MANIFEST_FILES_VERIFIED=90
+P06_R3_P05_UNMODIFIED_SECTIONS=PASS
+P06_R3_P04_GUARDED_PREFIX=PASS
+P06_R3_FLAGSHIP_WRITER_INVENTORY=PASS
+P06_STATIC_VERIFY_EXIT=0
+P06_STATIC_VERIFY=PASS
+STAGE=P06_R4_STATIC_VERIFY
+P06_R4_SINGLE_ALLOC_STATE_ROUTE_INVENTORY=PASS
+P06_R4_INCIDENT_GUARDIAN_ROUTING=PASS
+P06_R4_ORIGINAL_SEVEN_VIEWS_PRESERVED=PASS
+P06_R4_STATIC_VERIFY_EXIT=0
+P06_R4_STATIC_VERIFY=PASS
+STAGE=P06_FE_SHARED_LIBRARY_CHECK
+P06_FE_SHARED_LIBRARY_CHECK_EXIT=0
+P06_FE_SHARED_LIBRARY_CHECK=PASS
+STAGE=P06_FE_SHARED_LIBRARY_TEST
+PASS  [0.0003s] action_preview_produces_exact_candidate_and_errors
+PASS  [0.0000s] good_checked_edit_is_versioned
+PASS  [0.0000s] p03_initial_incident_metadata_is_inactive
+PASS  [0.0000s] p03_invalid_incident_spec_detected
+PASS  [0.0000s] p04_contained_only_rejects_new_deficits
+PASS  [0.0000s] p04_deficits_match_exact_both_dimensions
+PASS  [0.0000s] p04_transition_requires_strict_nonworsening_progress
+PASS  [0.0001s] p05_generic_library_allocation_predicates
+PASS  [0.0001s] p05_generic_library_governance_predicates
+PASS  [0.0001s] p05_generic_progressive_deficits_and_containment
+PASS  [0.0001s] p06_generic_migration_and_stored_spec_diag
+PASS  [0.0001s] p06_generic_ordered_errors_do_not_confer_approval
+PASS  [0.0001s] p06_generic_ordered_moves_retire_issue_and_goal
+PASS  [0.0002s] p06_generic_ordered_persistent_progressive_guard
+PASS  [0.0001s] pure_preview_does_not_mutate
+test result: ok. 15 passed; 0 failed
+P06_FE_SHARED_LIBRARY_TEST_EXIT=0
+P06_FE_SHARED_LIBRARY_TEST_TESTS=15
+P06_FE_SHARED_LIBRARY_TEST=PASS
+STAGE=P06_FE_P04_CHECK
+P06_FE_P04_CHECK_EXIT=0
+P06_FE_P04_CHECK=PASS
+STAGE=P06_FE_P04_REGRESSION_TEST
+PASS  [0.0008s] p02_action_expect_is_step_bound
+PASS  [0.0005s] p02_action_preview_commit_consistent
+PASS  [0.0004s] p02_bad_migration_final_reverts
+PASS  [0.0004s] p02_direct_bad_policy_reverts_entire_snapshot
+PASS  [0.0004s] p02_direct_overlarge_input_rejects_without_overflow
+PASS  [0.0001s] p02_early_return_cannot_evade_postcondition
+PASS  [0.0005s] p02_goal_exact_target_verified_in_fe
+PASS  [0.0004s] p02_issue_must_have_immediate_free_capacity
+PASS  [0.0004s] p02_migration_with_unsafe_intermediate_commits_safe_end
+PASS  [0.0004s] p02_preview_and_direct_commit_agree
+PASS  [0.0004s] p02_read_only_previews_do_not_increment
+PASS  [0.0004s] p02_rogue_caller_is_denied
+PASS  [0.0004s] p02_stale_direct_rejects_without_mutation
+PASS  [0.0005s] p03_all_ordinary_setter_routes_cannot_evade_incident
+PASS  [0.0005s] p03_distinct_actors_and_inactive_snapshot
+PASS  [0.0005s] p03_failed_atomic_activation_rolls_back_all_fields
+PASS  [0.0004s] p03_guardian_atomic_containment_and_exact_revision
+PASS  [0.0005s] p03_guardian_cannot_use_operator_setter
+PASS  [0.0005s] p03_guardian_release_invalidates_old_versions_and_preserves_history
+PASS  [0.0006s] p03_incident_commit_cannot_weaken_declared_limits
+PASS  [0.0007s] p03_incident_readonly_previews_match_stored_objective
+PASS  [0.0006s] p03_operator_cannot_activate_or_release
+PASS  [0.0007s] p03_reactivation_increments_incident_id
+PASS  [0.0007s] p03_stale_or_duplicate_guardian_activation_denied
+PASS  [0.0007s] p04_all_legacy_mutators_block_recovering_nonprogress
+PASS  [0.0007s] p04_authorized_worsening_reverts_full_state
+PASS  [0.0007s] p04_contained_cannot_regress_and_valid_adjustment_succeeds
+PASS  [0.0005s] p04_guardian_bound_release_and_stale_prevented
+PASS  [0.0004s] p04_guardian_cannot_release_uncontained_incident
+PASS  [0.0005s] p04_noop_and_expect_only_cannot_fake_progress
+PASS  [0.0005s] p04_preview_progressive_acceptance_and_partial_incident_mask
+PASS  [0.0005s] p04_progressive_activation_stores_uncontained_objective
+PASS  [0.0005s] p04_progressive_activation_when_safe_starts_contained
+PASS  [0.0005s] p04_progressive_two_step_recovery_reaches_contained
+PASS  [0.0005s] p04_recovering_specialized_commit_can_make_partial_progress
+PASS  [0.0005s] p04_tradeoff_cannot_worsen_reserve_while_improving_exposure
+PASS  [0.0005s] p04_unauthorized_and_stale_activation_denied
+test result: ok. 37 passed; 0 failed
+P06_FE_P04_REGRESSION_TEST_EXIT=0
+P06_FE_P04_REGRESSION_TEST_TESTS=37
+P06_FE_P04_REGRESSION_TEST=PASS
+STAGE=P06_FE_ALLOCATION_CHECK
+P06_FE_ALLOCATION_CHECK_EXIT=0
+P06_FE_ALLOCATION_CHECK=PASS
+STAGE=P06_FE_ALLOCATION_TEST
+PASS  [0.0008s] p05_pilot_atomic_unauthorized_rollback
+PASS  [0.0004s] p05_pilot_migration_finalization_and_preview
+PASS  [0.0004s] p05_pilot_permanent_rules_and_version
+PASS  [0.0005s] p05_pilot_progressive_and_recovery
+test result: ok. 4 passed; 0 failed
+P06_FE_ALLOCATION_TEST_EXIT=0
+P06_FE_ALLOCATION_TEST_TESTS=4
+P06_FE_ALLOCATION_TEST=PASS
+STAGE=P06_FE_FLAGSHIP_CHECK
+P06_FE_FLAGSHIP_CHECK_EXIT=0
+P06_FE_FLAGSHIP_CHECK=PASS
+STAGE=P06_FE_FLAGSHIP_TEST
+PASS  [0.0013s] p06_flagship_bad_exact_goal_full_rollback
+PASS  [0.0014s] p06_flagship_ordered_plan_and_single_revision
+PASS  [0.0012s] p06_flagship_progressive_protects_ordered_routes
+PASS  [0.0011s] p06_flagship_reordering_rejected_and_unauthorized_denied
+test result: ok. 4 passed; 0 failed
+P06_FE_FLAGSHIP_TEST_EXIT=0
+P06_FE_FLAGSHIP_TEST_TESTS=4
+P06_FE_FLAGSHIP_TEST=PASS
+STAGE=P06_FE_GOVERNANCE_CHECK
+P06_FE_GOVERNANCE_CHECK_EXIT=0
+P06_FE_GOVERNANCE_CHECK=PASS
+STAGE=P06_FE_GOVERNANCE_TEST
+PASS  [0.0004s] p05_governance_guardian_only_bound_release_and_atomic
+PASS  [0.0002s] p05_governance_migration_final_state_and_revision
+PASS  [0.0002s] p05_governance_permanent_quorum_and_delay_on_evm
+PASS  [0.0007s] p05_governance_progressive_restriction_two_deficits
+test result: ok. 4 passed; 0 failed
+P06_FE_GOVERNANCE_TEST_EXIT=0
+P06_FE_GOVERNANCE_TEST_TESTS=4
+P06_FE_GOVERNANCE_TEST=PASS
+STAGE=P06_FE_LEGACY_CHECK
+P06_FE_LEGACY_CHECK_EXIT=0
+P06_FE_LEGACY_CHECK=PASS
+STAGE=P06_FE_LEGACY_TEST
+PASS  [0.0010s] preview_and_commit_agree
+PASS  [0.0003s] rejected_over_budget_rolls_back
+PASS  [0.0002s] per_market_cap_rejects
+PASS  [0.0002s] paired_exposure_rejects
+PASS  [0.0002s] reserve_floor_rejects_without_exceeding_total
+PASS  [0.0002s] stale_version_rejects_and_preserves_state
+PASS  [0.0002s] early_return_cannot_skip_postcondition
+PASS  [0.0002s] unauthorized_contract_cannot_commit
+PASS  [0.0002s] ceiling_rejects_extreme_input_without_arithmetic_overflow
+PASS  [0.0002s] read_only_previews_cannot_change_version
+PASS  [0.0002s] migration_unhealthy_intermediates_end_healthy
+PASS  [0.0002s] migration_rejected_final_rolls_back_all_stages
+PASS  [0.0002s] migration_repeated_market_and_one_step
+PASS  [0.0002s] migration_rejects_stale_version_and_preserves_state
+PASS  [0.0002s] migration_requires_valid_step_count_and_market
+PASS  [0.0002s] actions_retire_issue_transfer_atomically
+PASS  [0.0002s] actions_reordering_is_a_genuine_operation_failure
+PASS  [0.0002s] actions_bad_final_policy_reverts_every_stage
+PASS  [0.0002s] actions_insufficient_transfer_and_same_market_rejected
+PASS  [0.0002s] actions_expected_state_is_checked_in_order
+PASS  [0.0002s] actions_stale_version_does_not_commit
+PASS  [0.0002s] actions_invalid_opcode_and_zero_quantity_cannot_commit
+PASS  [0.0002s] actions_readonly_preview_does_not_mutate_storage
+PASS  [0.0002s] goal_attested_one_step_transfer_and_dynamic_followup
+PASS  [0.0002s] goal_mismatch_fails_atomically_even_with_valid_policy
+PASS  [0.0002s] goal_attested_commit_keeps_final_policy_guard
+PASS  [0.0002s] goal_attested_stale_version_rejects
+PASS  [0.0002s] incident_core_exposure_and_reserve_checked_by_fe
+PASS  [0.0002s] incident_rejects_weak_exposure_even_when_ordinary_policy_passes
+PASS  [0.0002s] incident_rejects_insufficient_reserve_even_when_goal_matches
+PASS  [0.0002s] incident_goal_mismatch_reverts_even_if_constraints_pass
+PASS  [0.0002s] incident_invalid_specification_rejected_by_fe
+PASS  [0.0002s] incident_stale_version_and_order_precondition_cannot_commit
+PASS  [0.0002s] incident_unsafe_intermediate_safe_final_allowed
+test result: ok. 34 passed; 0 failed
+P06_FE_LEGACY_TEST_EXIT=0
+P06_FE_LEGACY_TEST_TESTS=34
+P06_FE_LEGACY_TEST=PASS
+STAGE=P06_PRIVATE_GENERIC_RULES
+error[2-0003]: `rules` is not visible
+    ΓöîΓöÇ src/lib.fe:4:7
+    Γöé
+  4 Γöé     g.rules.total
+    Γöé       ^^^^^ `rules` is not visible
+    Γöé
+    ΓöîΓöÇ src/lib.fe:775:5
+    Γöé
+775 Γöé     rules: TripleLimits,
+    Γöé     ----- `rules` is defined here
+P06_PRIVATE_GENERIC_RULES_EXIT=1
+P06_PRIVATE_GENERIC_RULES=PASS
+STAGE=P06_PRIVATE_OLD_REVISION
+error[2-0003]: `revision` is not visible
+    ΓöîΓöÇ src/lib.fe:6:7
+    Γöé
+  6 Γöé     g.revision
+    Γöé       ^^^^^^^^ `revision` is not visible
+    Γöé
+    ΓöîΓöÇ src/lib.fe:206:5
+    Γöé
+206 Γöé     revision: u256,
+    Γöé     -------- `revision` is defined here
+P06_PRIVATE_OLD_REVISION_EXIT=1
+P06_PRIVATE_OLD_REVISION=PASS
+STAGE=P06_PRIVATE_OLD_RULES
+error[2-0003]: `rules` is not visible
+    ΓöîΓöÇ src/lib.fe:6:7
+    Γöé
+  6 Γöé     g.rules.budget = 200000
+    Γöé       ^^^^^ `rules` is not visible
+    Γöé
+    ΓöîΓöÇ src/lib.fe:205:5
+    Γöé
+205 Γöé     rules: Rules,
+    Γöé     ----- `rules` is defined here
+P06_PRIVATE_OLD_RULES_EXIT=1
+P06_PRIVATE_OLD_RULES=PASS
+STAGE=P06_EXTERNAL_CALL_CONFLICT
+errors in file:///C:/Users/HP/Downloads/COVENANT_GUARD_P07_R2/contracts/IllegalCall.negative.fe
+error[16-0001]: access conflict in `fn IllegalCall::recv[0][0]`
+   ΓöîΓöÇ IllegalCall.negative.fe:24:27
+   Γöé
+21 Γöé               let x = mut guard.edit()
+   Γöé                           ----- access opened here
+   ┬╖
+24 Γöé               let outcome = call.raw_call(
+   Γöé Γò¡ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ^
+25 Γöé Γöé                 addr: target,
+26 Γöé Γöé                 gas: 100000,
+27 Γöé Γöé                 value: Wei::zero(),
+28 Γöé Γöé                 args: MemSpan::empty(),
+29 Γöé Γöé                 ret: mut output,
+30 Γöé Γöé             )
+   Γöé Γò░ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ^ this call may write storage while a `mut` access of it is open
+P06_EXTERNAL_CALL_CONFLICT_EXIT=1
+P06_EXTERNAL_CALL_CONFLICT=PASS
+STAGE=P06_BUILD_P04
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\p04/AllocationKernel.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\p04/AllocationKernel.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\p04/EarlyReturnFixture.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\p04/EarlyReturnFixture.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\p04/GuardianTestActor.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\p04/GuardianTestActor.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\p04/RogueOperator.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\p04/RogueOperator.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\p04/AllocationKernel.abi.json
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\p04/EarlyReturnFixture.abi.json
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\p04/GuardianTestActor.abi.json
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\p04/RogueOperator.abi.json
+P06_BUILD_P04_EXIT=0
+P06_BUILD_P04=PASS
+STAGE=P06_BUILD_ALLOCATION
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\allocation/AllocationPilot.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\allocation/AllocationPilot.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\allocation/PilotGuardianFixture.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\allocation/PilotGuardianFixture.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\allocation/AllocationPilot.abi.json
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\allocation/PilotGuardianFixture.abi.json
+P06_BUILD_ALLOCATION_EXIT=0
+P06_BUILD_ALLOCATION=PASS
+STAGE=P06_BUILD_FLAGSHIP
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\flagship/AllocationFlagship.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\flagship/AllocationFlagship.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\flagship/FlagshipGuardianFixture.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\flagship/FlagshipGuardianFixture.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\flagship/AllocationFlagship.abi.json
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\flagship/FlagshipGuardianFixture.abi.json
+P06_BUILD_FLAGSHIP_EXIT=0
+P06_BUILD_FLAGSHIP=PASS
+STAGE=P06_BUILD_GOVERNANCE
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\governance/GovernanceGuardianFixture.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\governance/GovernanceGuardianFixture.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\governance/GovernanceRegistry.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\governance/GovernanceRegistry.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\governance/GovernanceGuardianFixture.abi.json
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts\guard\governance/GovernanceRegistry.abi.json
+P06_BUILD_GOVERNANCE_EXIT=0
+P06_BUILD_GOVERNANCE=PASS
+STAGE=P06_BUILD_LEGACY
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts/CovenantControl.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts/CovenantControl.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts/RogueOperator.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts/RogueOperator.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts/CovenantControl.abi.json
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\artifacts/RogueOperator.abi.json
+P06_BUILD_LEGACY_EXIT=0
+P06_BUILD_LEGACY=PASS
+P06_ABI_ALLOCATION=PASS
+P06_ABI_GOVERNANCE=PASS
+P06_ABI_LEGACY=PASS
+P06_ABI_FLAGSHIP=PASS
+P06_R3_FLAGSHIP_UNBOUND_RELEASE_ABSENT=PASS
+P06_FE_98_TESTS=PASS
+P06_NPM_LOCKED_INSTALL_REQUIRED=YES
+STAGE=P06_NPM_CI
+added 26 packages in 7s
+P06_NPM_CI_EXIT=0
+P06_NPM_CI=PASS
+STAGE=P06_JS_SYNTAX
+> covenant-control-fe@0.2.0 check:js
+> node --check app/chain.mjs && node --check app/server.mjs && node --check app/guard-chain.mjs && node --check app/guard-api.mjs && node --check app/public/client.js && node --check app/public/guard.js && node --check app/tests/guard-runtime.test.mjs && node --check app/tests/guard-http.test.mjs && node --check app/flagship-candidate.mjs && node --check app/tests/flagship-candidate.test.mjs && node --check app/flagship-runtime.mjs && node --check app/tests/flagship-cutover.test.mjs
+P06_JS_SYNTAX_EXIT=0
+P06_JS_SYNTAX=PASS
+STAGE=P06_NODE_LEGACY_REGRESSION
+> covenant-control-fe@0.2.0 smoke
+> node --test app/tests/audit.test.mjs app/tests/planner.test.mjs app/tests/incident.test.mjs app/tests/runtime.test.mjs app/tests/http.test.mjs
+Γ£ö audit journal persists transactions and separates EVM sessions (16.1464ms)
+Γ£ö audit journal rejects altered transaction records on next startup (11.3496ms)
+Γ£ö audit journal fails closed on truncated final line (10.9113ms)
+Γ£ö HTTP workspace: Fe preview includes signer, transactions are audited, prior session remains distinct (3076.7293ms)
+Γ£ö HTTP migration studio: stage-level Fe evidence, one atomic transaction, audit persistence (3038.4683ms)
+Γ£ö HTTP operations studio: Fe operational order, policy rollback, journal verification and restart persistence (2864.581ms)
+Γ£ö HTTP goal planner: live-state plans, goal-attested commits, immutable audit, unauthorized and stale rejection (2750.9575ms)
+Γ£ö HTTP incident desk: three Fe-verified responses, exact terminal commitment, stale and tampered plans blocked (2877.4063ms)
+Γ£ö HTTP incident desk: impossible reserve, unauthorized signer, and incorrect strategy fingerprints submit no transactions (1649.7729ms)
+Γ£ö HTTP incident v1.7: Fe attests exposure/reserve/target and audit records independent incident mask (1444.0457ms)
+Γ£ö incident candidate generator responds to the actual Fe state and compares reserve tradeoffs (26.7217ms)
+Γ£ö incident Fe responses distinguish continuity, dispersion, and additional reserves (23.7895ms)
+Γ£ö incident request recalculates from a changed state and recognizes containment (0.5165ms)
+Γ£ö incident demand can be impossible without pretending Fe approved it (0.2308ms)
+Γ£ö incident Fe rejection is authoritative and reviewer cannot submit feasible goals (32.7727ms)
+Γ£ö fingerprint changes with scenario, strategy, version and exact plan (17.0541ms)
+Γ£ö planner cannot promote ordinary Fe permission into incident approval when Fe incident mask rejects (13.5048ms)
+Γ£ö wrong terminal target or incident goal cannot override the two-Fe-preview requirement (14.0832ms)
+Γ£ö planner derives a one-operation alternative to the three-step preset (3.435ms)
+Γ£ö planner recalculates from a changed version rather than replaying v1 values (0.6598ms)
+Γ£ö goal plan fingerprint binds goal, state version, exact target and ordered steps (1.8655ms)
+Γ£ö planner uses Fe static verdict rather than a locally invented policy decision (2.0211ms)
+Γ£ö planner cannot claim success when Fe rejects the final policy (0.8685ms)
+Γ£ö planner tries another order when Fe rejects the first candidate (0.6016ms)
+Γ£ö real Fe EVM execution: preview and commit agree, rejects unauthorized and stale writes (309.8149ms)
+Γ£ö Fe atomic migration: unsafe intermediate states, safe final commitment, full rollback, stale and unauthorized (201.1928ms)
+Γ£ö Fe semantic operations: strict order, intermediate cap violation, final commit, rollback and version protection (243.3057ms)
+Γ£ö Fe semantic operations: conditional execution cares about order (81.1191ms)
+Γ£ö Fe goal-attested actions reject wrong target, reject unsafe state, and accept live follow-up (156.1222ms)
+Γ£ö Fe incident commitment independently rejects exposure, reserve, and target violations (230.2065ms)
+Γ£ö Fe incident guard accepts temporary intermediate violation but only safe exact final state (76.4978ms)
+Γä╣ tests 31
+Γä╣ suites 0
+Γä╣ pass 31
+Γä╣ fail 0
+Γä╣ cancelled 0
+Γä╣ skipped 0
+Γä╣ todo 0
+Γä╣ duration_ms 17840.5905
+P06_NODE_LEGACY_REGRESSION_EXIT=0
+P06_NODE_LEGACY_REGRESSION_TESTS=31
+P06_NODE_LEGACY_REGRESSION=PASS
+STAGE=P06_NODE_GUARD_HTTP_UI
+> covenant-control-fe@0.2.0 guard:http
+> node --test app/tests/guard-http.test.mjs
+Γ£ö P06 same-server full integration: two Fe contracts, real risk lifecycle, baseline workspace preserved (1772.6452ms)
+Γ£ö P06 HTTP rejects malformed input, unexpected roles and cross-origin writes (1432.0351ms)
+Γä╣ tests 2
+Γä╣ suites 0
+Γä╣ pass 2
+Γä╣ fail 0
+Γä╣ cancelled 0
+Γä╣ skipped 0
+Γä╣ todo 0
+Γä╣ duration_ms 3306.8453
+P06_NODE_GUARD_HTTP_UI_EXIT=0
+P06_NODE_GUARD_HTTP_UI_TESTS=2
+P06_NODE_GUARD_HTTP_UI=PASS
+STAGE=P06_NODE_REAL_GUARD_EVM
+> covenant-control-fe@0.2.0 guard:unit
+> node --test app/tests/guard-runtime.test.mjs
+Γ£ö P06 real EVM deploys two distinct consumers with distinct role addresses (246.3769ms)
+Γ£ö P06 allocation Fe preview, operator authority and rejected full-state rollback (225.6295ms)
+Γ£ö P06 progressive Fe incident enforces strict vector improvement on every transaction (383.3518ms)
+Γ£ö P06 atomic activation either contains all risk immediately or rolls back everything (160.9674ms)
+Γ£ö P06 governance uses a different Fe policy and a delay-based buffer (279.1661ms)
+Γ£ö P06 two-field migration is guarded and domain-specific (159.742ms)
+Γä╣ tests 6
+Γä╣ suites 0
+Γä╣ pass 6
+Γä╣ fail 0
+Γä╣ cancelled 0
+Γä╣ skipped 0
+Γä╣ todo 0
+Γä╣ duration_ms 2733.7655
+P06_NODE_REAL_GUARD_EVM_EXIT=0
+P06_NODE_REAL_GUARD_EVM_TESTS=6
+P06_NODE_REAL_GUARD_EVM=PASS
+STAGE=P06_NODE_FLAGSHIP_CANDIDATE
+> covenant-control-fe@0.2.0 flagship:candidate
+> node --test app/tests/flagship-candidate.test.mjs
+Γ£ö P06-R3 flagship candidate: real Fe ordered action semantics and exact-goal EVM authorization (327.2544ms)
+Γ£ö P06-R3 flagship candidate: guardian progressive obligation blocks every alternate mutator and bound release (402.661ms)
+Γä╣ tests 2
+Γä╣ suites 0
+Γä╣ pass 2
+Γä╣ fail 0
+Γä╣ cancelled 0
+Γä╣ skipped 0
+Γä╣ todo 0
+Γä╣ duration_ms 2003.9576
+P06_NODE_FLAGSHIP_CANDIDATE_EXIT=0
+P06_NODE_FLAGSHIP_CANDIDATE_TESTS=2
+P06_NODE_FLAGSHIP_CANDIDATE=PASS
+STAGE=P06_NODE_FLAGSHIP_CUTOVER
+> covenant-control-fe@0.2.0 flagship:cutover
+> node --test app/tests/flagship-cutover.test.mjs
+Γ£ö R4 one flagship contract serves both browser surfaces; old desk, migrations, operations and planner share revision (1903.2515ms)
+Γ£ö R4 guardian activation is separate; all ordinary routes enforce stored progressive deficit and bound release (1881.3931ms)
+Γ£ö R4 incident desk gives prospective choices but requires guardian-stored exact objective to commit (1987.958ms)
+Γ£ö R4 guardian atomic containment on the Guard tab changes the same flagship used by seven views (1665.0812ms)
+Γä╣ tests 4
+Γä╣ suites 0
+Γä╣ pass 4
+Γä╣ fail 0
+Γä╣ cancelled 0
+Γä╣ skipped 0
+Γä╣ todo 0
+Γä╣ duration_ms 7541.7139
+P06_NODE_FLAGSHIP_CUTOVER_EXIT=0
+P06_NODE_FLAGSHIP_CUTOVER_TESTS=4
+P06_NODE_FLAGSHIP_CUTOVER=PASS
+P06_NODE_45_TESTS=PASS
+P06_SAME_SERVER_7_VIEW_AND_GUARD_UI=PASS
+P06_SEPARATE_GUARDIAN_EOA=PASS
+P06_TWO_REAL_SHARED_GUARD3_CONSUMERS=PASS
+P06_INTEGRATION_VERTICAL_SLICE=PASS
+P06_FLAGSHIP_SINGLE_GUARD_CONTRACT_CANDIDATE=PASS
+P06_GUARD_ALLOCATION_AND_FLAGSHIP_ONE_STATE=PASS
+P06_SEVEN_VIEW_MAIN_RUNTIME_ALLOCATIONFLAGSHIP=PASS
+P06_INCIDENT_GUARDIAN_REQUIRED=PASS
+P06_MASTER_FLAGSHIP_CUTOVER=PASS
+P06_R4_GATE=PASS
+NEXT=P07_INDEPENDENT_MODEL_AND_ADVERSARIAL_SECURITY_VERIFICATION
+REPORT_PATH=C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\P06_RUN_LOG.txt
+P07_P06_R4_BASELINE_FULL_REPLAY=PASS
+STAGE=P07_INDEPENDENT_ASSURANCE
+ADMIN_REQUIRED=NO
+PUBLIC_CHAIN=NO
+REAL_FUNDS=NONE
+SOURCE_MUTATIONS=DISPOSABLE_RESULTS_ONLY
+P07_P06_R4_BASELINE_FULL_REPLAY=PASS
+P07_MANIFEST_FILES_VERIFIED=90
+P07_FROZEN_P06_R4_SOURCE=PASS
+P07_PYTHON_VERSION=Python 3.12.10
+STAGE=P07_FROZEN_SOURCE_CHECK
+P07_FROZEN_P06_R4_SOURCE=PASS
+P07_FROZEN_SOURCE_COUNT=13
+P07_FROZEN_SOURCE_CHECK_EXIT=0
+P07_FROZEN_SOURCE_CHECK=PASS
+STAGE=P07_PYTHON_ORACLE_UNIT
+test_atomic (test_oracle.OracleTests.test_atomic) ... ok
+test_bounded_exhaustive_direct (test_oracle.OracleTests.test_bounded_exhaustive_direct) ... ok
+test_exposure_worsening_rejected (test_oracle.OracleTests.test_exposure_worsening_rejected) ... ok
+test_initial_invariant (test_oracle.OracleTests.test_initial_invariant) ... ok
+test_issue_capacity_order (test_oracle.OracleTests.test_issue_capacity_order) ... ok
+test_mutator_inventory (test_oracle.OracleTests.test_mutator_inventory) ... ok
+test_noop_rejected_recovering (test_oracle.OracleTests.test_noop_rejected_recovering) ... ok
+test_prefix_mixed_accept_reject (test_oracle.OracleTests.test_prefix_mixed_accept_reject) ... ok
+test_progressive_monotone (test_oracle.OracleTests.test_progressive_monotone) ... ok
+test_release_id_bound (test_oracle.OracleTests.test_release_id_bound) ... ok
+test_role_selector_phase_exhaustive_offchain (test_oracle.OracleTests.test_role_selector_phase_exhaustive_offchain) ... ok
+test_seed_reproducible (test_oracle.OracleTests.test_seed_reproducible) ... ok
+test_stale (test_oracle.OracleTests.test_stale) ... ok
+test_unauthorized (test_oracle.OracleTests.test_unauthorized) ... ok
+test_unsafe_goal_atomic (test_oracle.OracleTests.test_unsafe_goal_atomic) ... ok
+----------------------------------------------------------------------
+Ran 15 tests in 0.009s
+OK
+P07_PYTHON_ORACLE_UNIT_EXIT=0
+P07_PYTHON_ORACLE_UNIT=PASS
+P07_PYTHON_15_ORACLE_TESTS=PASS
+STAGE=P07_ABI_PROVENANCE
+P07_EXACT_19_SELECTOR_ABI_INVENTORY=PASS
+P07_ALL_EIGHT_WRITERS_ENUMERATED=PASS
+P07_FLAGSHIP_BIN_SHA256=27f9e92b939b8dfba9fab23a13ddeef79a30b3ea0ad503e620c0f1beb7ced1c9
+P07_ABI_PROVENANCE_EXIT=0
+P07_ABI_PROVENANCE=PASS
+STAGE=P07_PYTHON_VS_RAW_FE_EVM
+P07_SEEDED_DIFF_701=PASS accepts=30 rejects=70
+P07_SEEDED_DIFF_1701=PASS accepts=33 rejects=67
+P07_SEEDED_DIFF_2701=PASS accepts=36 rejects=64
+P07_FULL_72_CELL_ABI_MATRIX=PASS accepted=17 rejected=55
+P07_FINITE_DOMAIN_432_PREVIEWS=PASS
+Γ£ö P07 raw-Fe EVM differential seeded replay 701 (5318.4423ms)
+Γ£ö P07 raw-Fe EVM differential seeded replay 1701 (5281.512ms)
+Γ£ö P07 raw-Fe EVM differential seeded replay 2701 (5586.1815ms)
+Γ£ö P07 exhaustive writer x actor x phase signed EVM matrix (72 cells) (9163.0354ms)
+Γ£ö P07 bounded finite-domain static call (432 Fe previews, no mutation) (6000.1325ms)
+Γä╣ tests 5
+Γä╣ suites 0
+Γä╣ pass 5
+Γä╣ fail 0
+Γä╣ cancelled 0
+Γä╣ skipped 0
+Γä╣ todo 0
+Γä╣ duration_ms 32747.8181
+P07_PYTHON_VS_RAW_FE_EVM_EXIT=0
+P07_PYTHON_VS_RAW_FE_EVM=PASS
+P07_EVM_DIFFERENTIAL_TESTS=5
+P07_SIGNED_EVM_300_ACTIONS=PASS
+P07_ACTOR_SELECTOR_PHASE_72_CELLS=PASS
+P07_FINITE_DOMAIN_432_FE_PREVIEWS=PASS
+STAGE=P07_MUTANT_RECIPE_PREP
+P07_MUTANTS_PREPARED=8
+P07_MUTANTS_ARE_ISOLATED=YES
+P07_MUTANT_RECIPE_PREP_EXIT=0
+P07_MUTANT_RECIPE_PREP=PASS
+STAGE=P07_MUTANT_BUILD_authority
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\authority\artifacts/AllocationFlagship.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\authority\artifacts/AllocationFlagship.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\authority\artifacts/FlagshipGuardianFixture.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\authority\artifacts/FlagshipGuardianFixture.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\authority\artifacts/AllocationFlagship.abi.json
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\authority\artifacts/FlagshipGuardianFixture.abi.json
+P07_MUTANT_BUILD_authority_EXIT=0
+P07_MUTANT_BUILD_authority=PASS
+P07_MUTANT_COMPILED_authority=PASS
+STAGE=P07_MUTANT_BUILD_revision
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\revision\artifacts/AllocationFlagship.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\revision\artifacts/AllocationFlagship.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\revision\artifacts/FlagshipGuardianFixture.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\revision\artifacts/FlagshipGuardianFixture.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\revision\artifacts/AllocationFlagship.abi.json
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\revision\artifacts/FlagshipGuardianFixture.abi.json
+P07_MUTANT_BUILD_revision_EXIT=0
+P07_MUTANT_BUILD_revision=PASS
+P07_MUTANT_COMPILED_revision=PASS
+STAGE=P07_MUTANT_BUILD_incident_boundary
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\incident_boundary\artifacts/AllocationFlagship.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\incident_boundary\artifacts/AllocationFlagship.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\incident_boundary\artifacts/FlagshipGuardianFixture.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\incident_boundary\artifacts/FlagshipGuardianFixture.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\incident_boundary\artifacts/AllocationFlagship.abi.json
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\incident_boundary\artifacts/FlagshipGuardianFixture.abi.json
+P07_MUTANT_BUILD_incident_boundary_EXIT=0
+P07_MUTANT_BUILD_incident_boundary=PASS
+P07_MUTANT_COMPILED_incident_boundary=PASS
+STAGE=P07_MUTANT_BUILD_phase_finalization
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\phase_finalization\artifacts/AllocationFlagship.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\phase_finalization\artifacts/AllocationFlagship.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\phase_finalization\artifacts/FlagshipGuardianFixture.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\phase_finalization\artifacts/FlagshipGuardianFixture.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\phase_finalization\artifacts/AllocationFlagship.abi.json
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\phase_finalization\artifacts/FlagshipGuardianFixture.abi.json
+P07_MUTANT_BUILD_phase_finalization_EXIT=0
+P07_MUTANT_BUILD_phase_finalization=PASS
+P07_MUTANT_COMPILED_phase_finalization=PASS
+STAGE=P07_MUTANT_BUILD_permanent_policy
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\permanent_policy\artifacts/AllocationFlagship.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\permanent_policy\artifacts/AllocationFlagship.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\permanent_policy\artifacts/FlagshipGuardianFixture.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\permanent_policy\artifacts/FlagshipGuardianFixture.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\permanent_policy\artifacts/AllocationFlagship.abi.json
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\permanent_policy\artifacts/FlagshipGuardianFixture.abi.json
+P07_MUTANT_BUILD_permanent_policy_EXIT=0
+P07_MUTANT_BUILD_permanent_policy=PASS
+P07_MUTANT_COMPILED_permanent_policy=PASS
+STAGE=P07_MUTANT_BUILD_exact_goal
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\exact_goal\artifacts/AllocationFlagship.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\exact_goal\artifacts/AllocationFlagship.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\exact_goal\artifacts/FlagshipGuardianFixture.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\exact_goal\artifacts/FlagshipGuardianFixture.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\exact_goal\artifacts/AllocationFlagship.abi.json
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\exact_goal\artifacts/FlagshipGuardianFixture.abi.json
+P07_MUTANT_BUILD_exact_goal_EXIT=0
+P07_MUTANT_BUILD_exact_goal=PASS
+P07_MUTANT_COMPILED_exact_goal=PASS
+STAGE=P07_MUTANT_BUILD_guardian_release
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\guardian_release\artifacts/AllocationFlagship.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\guardian_release\artifacts/AllocationFlagship.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\guardian_release\artifacts/FlagshipGuardianFixture.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\guardian_release\artifacts/FlagshipGuardianFixture.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\guardian_release\artifacts/AllocationFlagship.abi.json
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\guardian_release\artifacts/FlagshipGuardianFixture.abi.json
+P07_MUTANT_BUILD_guardian_release_EXIT=0
+P07_MUTANT_BUILD_guardian_release=PASS
+P07_MUTANT_COMPILED_guardian_release=PASS
+STAGE=P07_MUTANT_BUILD_self_move
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\self_move\artifacts/AllocationFlagship.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\self_move\artifacts/AllocationFlagship.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\self_move\artifacts/FlagshipGuardianFixture.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\self_move\artifacts/FlagshipGuardianFixture.runtime.bin
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\self_move\artifacts/AllocationFlagship.abi.json
+Wrote C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\p07\mutants\self_move\artifacts/FlagshipGuardianFixture.abi.json
+P07_MUTANT_BUILD_self_move_EXIT=0
+P07_MUTANT_BUILD_self_move=PASS
+P07_MUTANT_COMPILED_self_move=PASS
+P07_MUTANTS_COMPILED=8
+STAGE=P07_COMPILED_MUTANT_EVM
+P07_MUTANT_AUTHORITY=KILLED
+P07_MUTANT_REVISION=KILLED
+P07_MUTANT_INCIDENT_BOUNDARY=KILLED
+P07_MUTANT_PHASE_FINALIZATION=KILLED
+P07_MUTANT_PERMANENT_POLICY=KILLED
+P07_MUTANT_EXACT_GOAL=KILLED
+P07_MUTANT_GUARDIAN_RELEASE=KILLED
+P07_MUTANT_SELF_MOVE=KILLED
+Γ£ö P07 compiled Fe mutation killed: authority (473.5653ms)
+Γ£ö P07 compiled Fe mutation killed: revision (330.5508ms)
+Γ£ö P07 compiled Fe mutation killed: incident_boundary (393.0537ms)
+Γ£ö P07 compiled Fe mutation killed: phase_finalization (451.5391ms)
+Γ£ö P07 compiled Fe mutation killed: permanent_policy (327.0662ms)
+Γ£ö P07 compiled Fe mutation killed: exact_goal (354.9516ms)
+Γ£ö P07 compiled Fe mutation killed: guardian_release (429.2989ms)
+Γ£ö P07 compiled Fe mutation killed: self_move (312.127ms)
+Γä╣ tests 8
+Γä╣ suites 0
+Γä╣ pass 8
+Γä╣ fail 0
+Γä╣ cancelled 0
+Γä╣ skipped 0
+Γä╣ todo 0
+Γä╣ duration_ms 4317.6315
+P07_COMPILED_MUTANT_EVM_EXIT=0
+P07_COMPILED_MUTANT_EVM=PASS
+P07_COMPILED_MUTANT_EVM_DETECTION_TESTS=8
+STAGE=P07_EVIDENCE_COLLECT
+P07_EVIDENCE_MANIFEST=PASS
+P07_FE_98_NODE_45_REGRESSIONS=PASS
+P07_SEEDED_300_TX=PASS
+P07_MATRIX_72=PASS
+P07_FINITE_432=PASS
+P07_ALL_8_COMPILED_MUTANTS_KILLED=PASS
+P07_EVIDENCE_COLLECT_EXIT=0
+P07_EVIDENCE_COLLECT=PASS
+P07_EVIDENCE_MANIFEST=PASS
+P07_R2_GATE=PASS
+NEXT=P07_REVIEW_FINDINGS_OR_P08_REPRODUCIBILITY
+REPORT_PATH=C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\P07_RUN_LOG.txt
+P07_FINAL_EVIDENCE_COUNTS=PASS
+P07_R2_GATE=PASS
+COVENANT_P07_R2_EXECUTION=PASS
+REPORT_PATH=C:\Users\HP\Downloads\COVENANT_GUARD_P07_R2\results\P07_DISPATCH_LOG.txt
+COVENANT_P07_R2_OWNER_RUN=PASS

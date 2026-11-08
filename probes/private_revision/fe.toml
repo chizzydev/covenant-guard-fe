@@ -1,0 +1,6 @@
+[ingot]
+name = "p02_private_revision_probe"
+version = "0.0.1"
+
+[dependencies]
+covenant_transition = { path = "../../library/covenant_transition" }

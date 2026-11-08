@@ -1,0 +1,6 @@
+[ingot]
+name = "covenant_allocation_kernel"
+version = "0.2.0"
+
+[dependencies]
+covenant_transition = { path = "../../library/covenant_transition" }

@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0c1220" />
+  <title>Covenant Control · Fe-native configuration workspace</title>
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="stylesheet" href="/style.css" />
+  <script src="/client.js" type="module" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Application navigation">
+      <div class="brand"><div class="brand-mark" aria-hidden="true"><svg width="21" height="21" viewBox="0 0 24 24" fill="none"><path d="M12 2 20.5 6.3v6.1c0 5.2-3.7 8.1-8.5 9.6-4.8-1.5-8.5-4.4-8.5-9.6V6.3L12 2Z" stroke="currentColor" stroke-width="1.8"/><path d="m8 12 2.6 2.7L16.5 9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div>Covenant <span>Control</span></div></div>
+      <div class="workspace-label">WORKSPACE <span>01</span></div>
+      <nav aria-label="Workspace pages">
+        <button class="nav active" type="button" data-page="desk" aria-current="page"><span class="nav-symbol">▦</span> Configuration desk <span class="nav-dot"></span></button>
+        <button class="nav" type="button" data-page="migration"><span class="nav-symbol">⇄</span> Migration studio <span class="nav-dot"></span></button>
+        <button class="nav" type="button" data-page="operations"><span class="nav-symbol">↗</span> Operations studio <span class="nav-dot"></span></button>
+        <button class="nav" type="button" data-page="planner"><span class="nav-symbol">◎</span> Goal planner <span class="nav-dot"></span></button>
+        <button class="nav" type="button" data-page="incident"><span class="nav-symbol">⚑</span> Incident response <span class="nav-dot"></span></button>
+        <button class="nav" type="button" data-page="catalog"><span class="nav-symbol">◫</span> Policy catalog</button>
+        <button class="nav" type="button" data-page="history"><span class="nav-symbol">≡</span> Local EVM history</button>
+        <a class="nav guard-nav-link" href="/guard.html"><span class="nav-symbol">⬡</span> Guard3 · live multi-domain demo</a>
+      </nav>
+      <div class="sidebar-bottom"><div class="safety-label"><span class="safety-pulse"></span> Isolated EVM sandbox</div><p>Real Fe bytecode. Disposable accounts. No live funds or external RPC.</p><div class="divider"></div><div class="sidebar-links">FE 26.5.0 <span>·</span> VERTICAL SLICE 05</div></div>
+    </aside>
+    <main class="main">
+      <header class="topbar"><div class="crumb">Covenant / <strong id="pageTitle">Configuration desk</strong></div><div class="top-actions"><span class="network"><i></i> Local EVM</span><span class="top-version">v<span id="headerVersion">—</span></span></div></header>
+      <div class="content">
+        <div id="deskView" class="view-panel">
+        <section class="intro"><div><div class="eyebrow">POLICY OPERATIONS <span class="eyebrow-line"></span> FE-NATIVE</div><h1>Change the configuration.<br><span>Keep the guarantees.</span></h1><p>Stage coupled allocations, inspect the final-state conditions, and commit through a compiler-guarded Fe contract.</p></div><div class="intro-side"><span class="live-tag">● LIVE CONTRACT</span><div id="contractShort" class="mono">Initializing…</div><small>Deployed inside this session</small></div></section>
+        <section class="summary-strip" aria-label="Current configuration summary"><div class="metric"><label>Total policy capacity</label><div class="metric-value"><span id="budgetValue">—</span> <small>units</small></div></div><div class="metric"><label>Committed allocation</label><div class="metric-value"><span id="committedValue">—</span> <small>units</small></div></div><div class="metric"><label>Protected reserve</label><div class="metric-value"><span id="reserveValue">—</span> <small>units</small></div></div><div class="metric"><label>Configuration version</label><div class="metric-value"><span id="versionValue">—</span> <small>active</small></div></div></section>
+        <section class="migration-spotlight" aria-label="Explore staged migrations">
+          <div class="spotlight-glyph">⇄</div><div><span class="spotlight-kicker">NEW · MARKET INCIDENT RESPONSE</span><h3>Respond to a capacity alert. Compare safe choices.</h3><p>Set an exposure limit, compare Fe-verified response plans, and commit with on-chain incident checks.</p></div>
+          <button type="button" data-page="incident" class="spotlight-action">Open Incident Desk <span>→</span></button>
+        </section>
+        <div class="section-title"><div><span class="section-number">01</span><h2>Prepare a change</h2><p>Preview is evaluated by the deployed Fe contract, not a JavaScript copy of its policy.</p></div><button class="text-btn" id="reloadBtn" type="button">↻ Reload current state</button></div>
+        <div class="workspace-grid">
+          <section class="panel editor-panel" aria-label="Allocation editor"><div class="panel-top"><div><h3>Market configuration</h3><p>Set proposed limits for three linked markets.</p></div><span class="panel-chip">DRAFT</span></div>
+            <div class="preset-row"><span>Scenarios</span><button class="preset active" type="button" data-preset="balanced">Balanced</button><button class="preset" type="button" data-preset="paired">Pair violation</button><button class="preset" type="button" data-preset="over">Over cap</button></div>
+            <div class="inputs" id="inputGroup">
+              <div class="market"><div class="market-title"><span class="market-icon a">A</span><div><label for="aInput">Core market</label><small>Higher-concentration exposure</small></div></div><div class="market-tools"><div class="market-track"><div class="market-fill a" id="barA"></div></div><div class="number-box"><input type="number" min="0" max="1000000" step="1" inputmode="numeric" id="aInput" value="350"><span>units</span></div></div><div class="cap-text">Market ceiling <strong id="capA">—</strong></div></div>
+              <div class="market"><div class="market-title"><span class="market-icon b">B</span><div><label for="bInput">Supporting market</label><small>Backing exposure for Core</small></div></div><div class="market-tools"><div class="market-track"><div class="market-fill b" id="barB"></div></div><div class="number-box"><input type="number" min="0" max="1000000" step="1" inputmode="numeric" id="bInput" value="350"><span>units</span></div></div><div class="cap-text">Market ceiling <strong id="capB">—</strong></div></div>
+              <div class="market"><div class="market-title"><span class="market-icon c">C</span><div><label for="cInput">Satellite market</label><small>Additional independent allocation</small></div></div><div class="market-tools"><div class="market-track"><div class="market-fill c" id="barC"></div></div><div class="number-box"><input type="number" min="0" max="1000000" step="1" inputmode="numeric" id="cInput" value="150"><span>units</span></div></div><div class="cap-text">Market ceiling <strong id="capC">—</strong></div></div>
+            </div>
+            <div class="editor-bottom"><div class="tiny-label">TRANSACTION SIGNER</div><select id="actorSelect" aria-label="Choose local signer"><option value="admin">Authorized operator · demo account</option><option value="reviewer">Untrusted reviewer · demo account</option></select><div class="hint">Select the reviewer to demonstrate an on-chain authorization rejection.</div></div>
+          </section>
+          <section class="panel analysis-panel" aria-label="Fe policy preview"><div class="panel-top"><div><h3>Fe policy evaluation</h3><p>Computed by <code>preview()</code> on the deployed contract.</p></div><span class="status loading" id="previewStatus">Loading</span></div>
+            <div class="result-hero"><div class="result-top"><span>Proposed total</span><span id="newVersion" class="mono subtle">Target v—</span></div><div class="result-value"><span id="proposalTotal">—</span><small> / <span id="proposalBudget">—</span> units</small></div><div class="stackbar" id="stackbar"><div id="segmentA" class="segment a"></div><div id="segmentB" class="segment b"></div><div id="segmentC" class="segment c"></div><div id="segmentFree" class="segment free"></div></div><div class="stack-legend"><span><i class="legend-dot a"></i>Core</span><span><i class="legend-dot b"></i>Supporting</span><span><i class="legend-dot c"></i>Satellite</span><span><i class="legend-dot free"></i>Unallocated</span></div></div>
+            <div class="policy-checks"><div class="checks-head">POLICY CONDITIONS <span>Fe evaluated</span></div><div class="rule" data-rule="1"><span class="rule-sign">·</span><div><strong>Total allocation</strong><small>Stay within global capacity</small></div></div><div class="rule" data-rule="2"><span class="rule-sign">·</span><div><strong>Per-market ceilings</strong><small>Each market within its bound</small></div></div><div class="rule" data-rule="4"><span class="rule-sign">·</span><div><strong>Protected reserve</strong><small>Maintain at least <span id="floorValue">—</span> unallocated units</small></div></div><div class="rule" data-rule="8"><span class="rule-sign">·</span><div><strong>Paired exposure</strong><small>Core ≤ <span id="pairMultiplier">—</span> × Supporting</small></div></div><div class="rule" data-rule="16"><span class="rule-sign">·</span><div><strong>Version consistency</strong><small>Prevent stale changes from overwriting new state</small></div></div><div class="rule" data-rule="32"><span class="rule-sign">·</span><div><strong>Input bound</strong><small>Reject values outside the allowed domain</small></div></div></div>
+            <div class="action-area"><div id="authCheck" class="auth-check" aria-live="polite">Signer eligibility will be evaluated on the Fe contract.</div><div class="preview-source"><span class="inline-dot"></span><span id="sourceInfo">Waiting for Fe EVM</span></div><button id="commitBtn" type="button" class="primary-btn" disabled>Commit guarded change <span>→</span></button><button id="proveBtn" type="button" class="secondary-btn" disabled>Attempt the rejected commit anyway</button><div id="resultMessage" class="result-message" aria-live="polite">Initialize the local EVM to begin.</div></div>
+          </section>
+        </div>
+        <div class="bottom-grid"><section class="panel details-panel"><div class="panel-top"><div><h3>How the protection works</h3><p>Two layers. One compiled Fe policy.</p></div><span class="panel-chip">DESIGN</span></div><div class="architect-steps"><div class="step"><div class="step-number">01</div><div><strong>Stage a coherent proposal</strong><p>Multiple market values change as a single logical configuration.</p></div></div><div class="step"><div class="step-number">02</div><div><strong>Preview using Fe bytecode</strong><p>The local EVM calls the exact contract implementation that enforces the live update.</p></div></div><div class="step"><div class="step-number">03</div><div><strong>Guarded finalization</strong><p>Fe’s projection slide checks the final state on scope exit; failed commits revert atomically.</p></div></div></div></section>
+          <section class="panel history-panel"><div class="panel-top"><div><h3>Local execution log</h3><p>Committed and rejected sandbox transactions.</p></div><span class="panel-chip">ACTIVE SESSION</span></div><div id="historyEntries" class="history"><div class="empty-history">No transactions yet.<br>Try a proposal to create your first record.</div></div></section></div>
+        </div><!-- deskView -->
+        <section id="migrationView" class="view-panel" hidden>
+          <div class="eyebrow">ATOMIC MIGRATIONS <span class="eyebrow-line"></span> FE GUARDED SCOPE</div>
+          <h1 class="view-title">Several moves.<br><span>One safe outcome.</span></h1>
+          <p class="view-description">Stage up to three ordered market changes. Intermediate states may violate policy. The final state must satisfy every Fe invariant before a single local EVM transaction can commit.</p>
+          <div class="migration-banner panel">
+            <div class="migration-banner-mark">⇄</div>
+            <div><strong>One Fe scope, one version transition</strong><p>All edits execute inside <code>guarded_edit()</code>. An invalid final state reverts every staged edit. The browser does not decide policy validity.</p></div>
+            <div class="migration-live">FROM v<span id="migrationFromVersion">—</span><span>→</span> TO v<span id="migrationToVersion">—</span></div>
+          </div>
+          <div class="migration-layout">
+            <section class="panel migration-editor">
+              <div class="panel-top"><div><h3>Ordered migration plan</h3><p>Define the sequence. A later step may revise an earlier market.</p></div><span class="panel-chip">MAX 3 STEPS</span></div>
+              <div class="migration-presets"><span>Examples</span>
+                <button type="button" class="mig-preset active" data-mig-preset="recover">Recover capacity</button>
+                <button type="button" class="mig-preset" data-mig-preset="reject">Unsafe finish</button>
+                <button type="button" class="mig-preset" data-mig-preset="steady">Conservative</button>
+              </div>
+              <div class="migration-count"><label for="migrationCount">Number of operations</label><select id="migrationCount"><option value="1">1 step</option><option value="2">2 steps</option><option value="3" selected>3 steps</option></select></div>
+              <div class="migration-step-stack">
+                <div class="migration-step" data-stage="1"><div class="migration-step-index">01</div><div class="migration-step-controls"><label for="stage1Market">Set market</label><select id="stage1Market"><option value="0">Core</option><option value="1">Supporting</option><option value="2">Satellite</option></select><label for="stage1Value">New allocation (units)</label><input id="stage1Value" type="number" min="0" max="1000000" step="1" value="550" /></div><div id="stage1Verdict" class="stage-verdict pending">FE CHECK PENDING</div></div>
+                <div class="migration-step" data-stage="2"><div class="migration-step-index">02</div><div class="migration-step-controls"><label for="stage2Market">Set market</label><select id="stage2Market"><option value="0">Core</option><option value="1" selected>Supporting</option><option value="2">Satellite</option></select><label for="stage2Value">New allocation (units)</label><input id="stage2Value" type="number" min="0" max="1000000" step="1" value="200" /></div><div id="stage2Verdict" class="stage-verdict pending">FE CHECK PENDING</div></div>
+                <div class="migration-step" data-stage="3"><div class="migration-step-index">03</div><div class="migration-step-controls"><label for="stage3Market">Set market</label><select id="stage3Market"><option value="0">Core</option><option value="1">Supporting</option><option value="2">Satellite</option></select><label for="stage3Value">New allocation (units)</label><input id="stage3Value" type="number" min="0" max="1000000" step="1" value="350" /></div><div id="stage3Verdict" class="stage-verdict pending">FE CHECK PENDING</div></div>
+              </div>
+              <div class="migration-signer"><label for="migrationActor">Local transaction signer</label><select id="migrationActor"><option value="admin">Authorized operator · demo account</option><option value="reviewer">Untrusted reviewer · demo account</option></select></div>
+            </section>
+            <section class="panel migration-result">
+              <div class="panel-top"><div><h3>Fe migration verdict</h3><p>Evaluated by <code>previewMigration()</code> on the deployed contract.</p></div><span id="migrationPreviewStatus" class="status loading">EVALUATING</span></div>
+              <div class="migration-final-card"><small>Final configuration if committed</small><div id="migrationFinal" class="migration-final-values">— / — / —</div><div id="migrationTotal" class="migration-final-sub">— units total</div></div>
+              <div class="migration-stage-explain"><strong>Why an unsafe intermediate is permitted</strong><p>Each step is shown with its Fe-evaluated policy violations. These intermediate verdicts are explanatory, not transaction approvals. <strong>Only the final candidate is committed</strong> after the guarded scope closes.</p></div>
+              <div class="migration-check-title">FINAL POLICY CONDITIONS</div>
+              <div class="migration-flags" id="migrationFinalFlags">Loading Fe verdict…</div>
+              <div id="migrationSignerCheck" class="auth-check">Checking signer authority…</div>
+              <button type="button" class="primary-btn migration-primary" id="migrationCommitBtn" disabled>Commit 3-step migration →</button>
+              <button type="button" class="secondary-btn migration-secondary" id="migrationRejectBtn" disabled>Attempt rejected migration for proof</button>
+              <p id="migrationMessage" class="result-message">Preparing Fe migration preview…</p>
+            </section>
+          </div>
+          <section class="panel migration-foot"><h3>The before / intermediate / after proof</h3><p>Choose <strong>Recover capacity</strong>. Step 1 exceeds the reserve rule, step 2 breaches the paired-exposure rule, and step 3 fixes both. The final state is valid, so Fe can commit all three edits in one version change. Choose <strong>Unsafe finish</strong> to prove that an invalid final edit reverts the entire transaction.</p><button type="button" class="text-btn" data-page="history">View transaction evidence →</button></section>
+        </section>
+        <!-- v1.5: existing operations studio preserved; goal planner added separately. -->
+        <section id="operationsView" class="view-panel" hidden>
+          <div class="eyebrow">CAPACITY OPERATIONS <span class="eyebrow-line"></span> FE-ENFORCED SEQUENCE</div>
+          <h1 class="view-title">Order changes the outcome.<br><span>Commit only when they work.</span></h1>
+          <p class="view-description">A transfer, retirement, issuance or state precondition is not an arbitrary value assignment. Fe checks each operation against the state created by earlier steps, then its guarded scope verifies the final configuration. One signed local EVM transaction; no funds involved.</p>
+          <section class="panel ops-narrative">
+            <div><span class="spotlight-kicker">SCENARIO · RECYCLE CAPACITY</span><h3>Free capacity before issuing it.</h3><p>Initially 800 of 1,000 units are allocated. Issuing 250 first fails: only 200 units are free. Retire 250 from Core first, issue 250 to Supporting, then move 100 back to Core. The middle state breaches the Supporting ceiling but the final configuration is healthy.</p></div>
+            <div class="ops-narrative-tags"><span>Fe operation checks</span><span>Fe final-scope guard</span><span>Versioned atomic commit</span></div>
+          </section>
+          <div class="ops-layout">
+            <section class="panel ops-editor">
+              <div class="panel-top"><div><h3>Ordered operation plan</h3><p>Every step is applied by the Fe contract, including conditional preconditions.</p></div><span class="panel-chip">MAX 3 OPS</span></div>
+              <div class="migration-presets"><span>Scenarios</span>
+                <button type="button" class="ops-preset active" data-ops-preset="recycle">Recycle capacity</button>
+                <button type="button" class="ops-preset" data-ops-preset="reversed">Wrong order</button>
+                <button type="button" class="ops-preset" data-ops-preset="unsafe">Unsafe final</button>
+                <button type="button" class="ops-preset" data-ops-preset="conditional">Conditional plan</button>
+              </div>
+              <div class="migration-count"><label for="opsCount">Number of operations</label><select id="opsCount"><option value="1">1 operation</option><option value="2">2 operations</option><option value="3" selected>3 operations</option></select></div>
+              <div class="operations-stack">
+                <article class="ops-step" data-op-stage="1"><div class="ops-step-index">01</div><div class="ops-step-form">
+                  <label for="opStep1Type">Operation</label><select id="opStep1Type"><option value="move">Transfer capacity</option><option value="retire" selected>Retire to unallocated</option><option value="issue">Issue from unallocated</option><option value="expect">Require current allocation</option></select>
+                  <div class="ops-control" id="opStep1FromWrap"><label for="opStep1From">From / market</label><select id="opStep1From"><option value="0" selected>Core</option><option value="1">Supporting</option><option value="2">Satellite</option></select></div>
+                  <div class="ops-control" id="opStep1ToWrap"><label for="opStep1To">Destination market</label><select id="opStep1To"><option value="0">Core</option><option value="1">Supporting</option><option value="2">Satellite</option></select></div>
+                  <label for="opStep1Amount" id="opStep1AmountLabel">Units</label><input id="opStep1Amount" type="number" min="0" max="1000000" step="1" value="250" inputmode="numeric">
+                </div><div id="opStep1Verdict" class="stage-verdict pending">WAITING FOR FE PREVIEW</div></article>
+                <article class="ops-step" data-op-stage="2"><div class="ops-step-index">02</div><div class="ops-step-form">
+                  <label for="opStep2Type">Operation</label><select id="opStep2Type"><option value="move">Transfer capacity</option><option value="retire">Retire to unallocated</option><option value="issue" selected>Issue from unallocated</option><option value="expect">Require current allocation</option></select>
+                  <div class="ops-control" id="opStep2FromWrap"><label for="opStep2From">From / market</label><select id="opStep2From"><option value="0">Core</option><option value="1" selected>Supporting</option><option value="2">Satellite</option></select></div>
+                  <div class="ops-control" id="opStep2ToWrap"><label for="opStep2To">Destination market</label><select id="opStep2To"><option value="0">Core</option><option value="1" selected>Supporting</option><option value="2">Satellite</option></select></div>
+                  <label for="opStep2Amount" id="opStep2AmountLabel">Units</label><input id="opStep2Amount" type="number" min="0" max="1000000" step="1" value="250" inputmode="numeric">
+                </div><div id="opStep2Verdict" class="stage-verdict pending">WAITING FOR FE PREVIEW</div></article>
+                <article class="ops-step" data-op-stage="3"><div class="ops-step-index">03</div><div class="ops-step-form">
+                  <label for="opStep3Type">Operation</label><select id="opStep3Type"><option value="move" selected>Transfer capacity</option><option value="retire">Retire to unallocated</option><option value="issue">Issue from unallocated</option><option value="expect">Require current allocation</option></select>
+                  <div class="ops-control" id="opStep3FromWrap"><label for="opStep3From">From / market</label><select id="opStep3From"><option value="0">Core</option><option value="1" selected>Supporting</option><option value="2">Satellite</option></select></div>
+                  <div class="ops-control" id="opStep3ToWrap"><label for="opStep3To">Destination market</label><select id="opStep3To"><option value="0" selected>Core</option><option value="1">Supporting</option><option value="2">Satellite</option></select></div>
+                  <label for="opStep3Amount" id="opStep3AmountLabel">Units</label><input id="opStep3Amount" type="number" min="0" max="1000000" step="1" value="100" inputmode="numeric">
+                </div><div id="opStep3Verdict" class="stage-verdict pending">WAITING FOR FE PREVIEW</div></article>
+              </div>
+              <div class="migration-signer"><label for="opsActor">Local transaction signer</label><select id="opsActor"><option value="admin">Authorized operator · demo account</option><option value="reviewer">Untrusted reviewer · demo account</option></select></div>
+            </section>
+            <section class="panel ops-result">
+              <div class="panel-top"><div><h3>Fe execution plan verdict</h3><p>Evaluated by <code>previewActions()</code> on the same EVM contract that commits.</p></div><span class="status loading" id="opsPreviewStatus">EVALUATING</span></div>
+              <div class="migration-final-card"><small id="opsFinalTitle">Final allocation if committed</small><div class="migration-final-values" id="opsFinal">— / — / —</div><div class="migration-final-sub" id="opsTotal">Waiting for Fe…</div></div>
+              <div class="ops-before-after"><span>Current Fe configuration</span><strong id="opsBefore">— / — / —</strong><span>Proposed version</span><strong id="opsVersion">—</strong></div>
+              <div class="migration-stage-explain"><strong>Two different safety gates</strong><p><strong>Operation preconditions</strong> are never waived: no spending capacity before it exists, no transfer beyond its source, and no ignored state assertion. <strong>Cross-field policy</strong> may be temporarily violated, but must pass when the Fe projection scope ends.</p></div>
+              <div class="migration-check-title">FE VERDICT</div><div id="opsFlags" class="migration-flags">Loading Fe output…</div>
+              <div id="opsSignerCheck" class="auth-check">Checking signer…</div>
+              <div class="action-area ops-actions"><button id="opsCommitBtn" type="button" class="primary-btn" disabled>Execute atomic plan →</button><button id="opsRejectBtn" type="button" class="secondary-btn" disabled>Attempt rejected plan for proof</button><div id="opsMessage" class="result-message">Preparing operations preview…</div></div>
+            </section>
+          </div>
+          <section class="panel migration-foot"><h3>Why order matters here</h3><p>The <strong>Recycle capacity</strong> plan succeeds with Fe policy masks <strong>0 → 2 → 0</strong>. Choosing <strong>Wrong order</strong> runs the issue instruction first. Fe reports <strong>insufficient unallocated capacity</strong> before the final-state validator is even considered. <strong>Unsafe final</strong> proves that individually valid instructions can still be rolled back by the final scope guard. Conditional plans prove the value of an exact-state precondition.</p><button type="button" class="text-btn" data-page="history">Inspect signed execution evidence →</button></section>
+        </section>
+        <!-- v1.5: goal-derived plan, with Fe policy + terminal-goal attestation. -->
+        <section id="plannerView" class="view-panel" hidden>
+          <div class="eyebrow">GOAL-DRIVEN OPERATIONS <span class="eyebrow-line"></span> FE-ATTESTED OUTCOME</div>
+          <h1 class="view-title">Tell us the outcome.<br><span>Verify every move.</span></h1>
+          <p class="view-description">Set a concrete allocation objective. Covenant plans from the live Fe state, chooses an executable sequence, and asks the compiled contract whether it is safe. A separate Fe assertion enforces your exact target at commitment. No real funds.</p>
+          <section class="panel planner-banner">
+            <div><span class="spotlight-kicker">GOALS, NOT HARDCODED PRESETS</span><h3>One objective. A state-aware, Fe-verified plan.</h3><p>Prefer direct capacity movements and generate up to three operations. If the goal cannot be achieved, see the real Fe operation or policy reason. No transaction is sent until you choose to commit.</p></div>
+            <div class="planner-banner-stats"><span>Fe preview is authoritative</span><span>Exact target asserted on-chain</span><span>Signed local transaction</span></div>
+          </section>
+          <div class="planner-layout">
+            <section class="panel planner-editor">
+              <div class="panel-top"><div><h3>Define the objective</h3><p>Current configuration: <strong id="plannerBefore">—</strong> · v<strong id="plannerCurrentVersion">—</strong></p></div><span class="panel-chip">CURRENT STATE</span></div>
+              <div class="planner-presets"><span>Examples</span>
+                <button type="button" class="planner-preset" data-planner-preset="move">Move 150 Core → Supporting</button>
+                <button type="button" class="planner-preset" data-planner-preset="target">Exact target</button>
+                <button type="button" class="planner-preset" data-planner-preset="invalid">Over ceiling</button>
+              </div>
+              <label class="planner-label" for="plannerKind">I want to…</label>
+              <select id="plannerKind" class="planner-select"><option value="shift" selected>Move capacity between markets</option><option value="target">Reach an exact three-market allocation</option></select>
+              <div id="plannerShiftInputs" class="planner-input-group">
+                <div><label for="plannerSource">Move from</label><select id="plannerSource"><option value="0" selected>Core</option><option value="1">Supporting</option><option value="2">Satellite</option></select></div>
+                <div><label for="plannerDestination">Move into</label><select id="plannerDestination"><option value="0">Core</option><option value="1" selected>Supporting</option><option value="2">Satellite</option></select></div>
+                <div class="planner-quantity"><label for="plannerQuantity">Exact quantity (units)</label><input id="plannerQuantity" type="number" min="1" step="1" value="150" inputmode="numeric"></div>
+              </div>
+              <div id="plannerTargetInputs" class="planner-input-group" hidden>
+                <div><label for="plannerTargetA">Core target</label><input id="plannerTargetA" type="number" min="0" step="1" value="250" inputmode="numeric"></div>
+                <div><label for="plannerTargetB">Supporting target</label><input id="plannerTargetB" type="number" min="0" step="1" value="450" inputmode="numeric"></div>
+                <div><label for="plannerTargetC">Satellite target</label><input id="plannerTargetC" type="number" min="0" step="1" value="100" inputmode="numeric"></div>
+              </div>
+              <div class="migration-signer"><label for="plannerActor">Local transaction signer</label><select id="plannerActor"><option value="admin">Authorized operator · demo account</option><option value="reviewer">Untrusted reviewer · demo account</option></select></div>
+              <button id="plannerGenerateBtn" type="button" class="primary-btn planner-generate">Generate &amp; verify a plan →</button>
+              <div class="planner-hint">Changing the goal or signer immediately invalidates the previous plan.</div>
+            </section>
+            <section class="panel planner-result">
+              <div class="panel-top"><div><h3>Fe-verified execution plan</h3><p>Operation candidates are composed off-chain; Fe validates the actual outcome.</p></div><span id="plannerStatus" class="status loading">NOT PLANNED</span></div>
+              <div class="migration-final-card"><small>Requested terminal configuration</small><div id="plannerTarget" class="migration-final-values">— / — / —</div><div id="plannerSummary" class="migration-final-sub">Choose an objective, then generate a plan.</div></div>
+              <div id="plannerSteps" class="planner-steps"><div class="planner-empty">No verified execution plan yet.</div></div>
+              <div id="plannerExplanation" class="planner-explanation">Fe preview and the on-chain goal assertion will be checked separately.</div>
+              <div class="planner-proof"><strong>Two independent guarantees</strong><p>Fe rejects invalid operation order and unsafe final configurations. The new <code>commitGoalActions()</code> also rejects a transaction whose final Core / Supporting / Satellite values differ from your explicit objective.</p></div>
+              <button id="plannerCommitBtn" type="button" class="primary-btn planner-commit" disabled>Commit the verified goal →</button>
+              <div id="plannerMessage" class="result-message" aria-live="polite">No transaction submitted.</div>
+            </section>
+          </div>
+          <section class="panel migration-foot"><h3>Why this is different from a preset</h3><p>A preset assumes an old state. The Goal Planner reads the actual Fe configuration and recalculates how to reach your requested outcome. If the same goal is already satisfied, it proposes no transaction. If a market is over its ceiling, Fe gives the rejection reason. If a new transaction changes the contract version, the old plan must be regenerated.</p><button type="button" class="text-btn" data-page="history">View goal-attested transaction history →</button></section>
+        </section>
+        <section id="incidentView" class="view-panel" hidden>
+          <div class="eyebrow">RISK OPERATIONS <span class="eyebrow-line"></span> FE-VERIFIED RESPONSE</div>
+          <h1 class="view-title">When a market changes.<br><span>Know your safe options.</span></h1>
+          <p class="view-description">An operator reports a capacity risk, selects a temporary exposure limit and reserve objective, then compares alternative responses. Every executable plan is previewed by the actual Fe contract and committed as an exact terminal outcome.</p>
+          <section class="incident-disclosure"><strong>Operator-entered scenario, not an automated risk feed.</strong> All market exposures are synthetic allocation units. Fe checks the exposure ceiling, minimum reserve, exact target, and ordinary policy inside one transaction. This app does not authenticate external alerts, move real funds, or change the contract's fixed policy limits.</section>
+          <div class="incident-context panel">
+            <div><small>Current Fe configuration</small><strong id="incidentCurrent">—</strong></div>
+            <div><small>Unallocated reserve</small><strong id="incidentCurrentReserve">— units</strong></div>
+            <div><small>Configuration version</small><strong id="incidentVersion">v—</strong></div>
+          </div>
+          <div class="incident-layout">
+            <section class="panel incident-editor" aria-label="Incident definition">
+              <div class="panel-top"><div><h3>Define the incident</h3><p>Set temporary objectives, not new on-chain policies.</p></div><span class="panel-chip">OPERATOR INPUT</span></div>
+              <div class="incident-presets"><span>Example alerts</span>
+                <button class="incident-preset" type="button" data-incident-preset="core">Core risk · 200 limit</button>
+                <button class="incident-preset" type="button" data-incident-preset="reserve">Protect 300 reserve</button>
+                <button class="incident-preset" type="button" data-incident-preset="impossible">Impossible buffer</button>
+              </div>
+              <label class="incident-label" for="incidentMarket">Affected market</label>
+              <select id="incidentMarket" class="incident-select"><option value="0" selected>Core · concentration risk</option><option value="1">Supporting · backing exposure</option><option value="2">Satellite · independent exposure</option></select>
+              <div class="incident-field-grid">
+                <div><label for="incidentMax">Temporary exposure maximum (units)</label><input id="incidentMax" type="number" min="0" step="1" value="200" inputmode="numeric"></div>
+                <div><label for="incidentReserve">Required unallocated reserve (units)</label><input id="incidentReserve" type="number" min="100" step="1" value="200" inputmode="numeric"></div>
+              </div>
+              <div class="incident-baseline"><strong>Decision</strong><p id="incidentObjective">Reduce affected-market exposure while preserving the requested reserve. No transaction is submitted during assessment.</p></div>
+              <label class="incident-label" for="incidentActor">Local transaction signer</label>
+              <select id="incidentActor" class="incident-select"><option value="admin" selected>Authorized operator · demo account</option><option value="reviewer">Untrusted reviewer · demo account</option></select>
+              <button id="incidentAssessBtn" class="primary-btn incident-generate" type="button">Compare Fe-verified responses →</button>
+              <div class="incident-baseline"><strong>Persistent guardian objective</strong><p id="guardianObjectiveStatus">Reading the Fe incident phase…</p><button id="incidentGuardianActivateBtn" type="button" class="primary-btn">Guardian: Activate entered incident (progressive)</button><p>Separate guardian action; no operator auto-approval. Or use <a href="/guard.html">Guard authority console</a>. After activation, reassess before operator commitment.</p></div>
+              <p class="incident-hint">Changing any incident field or signer invalidates the previous assessment. Commit rechecks against the latest contract state.</p>
+            </section>
+            <section class="panel incident-review" aria-label="Fe response assessment">
+              <div class="panel-top"><div><h3>Response comparison</h3><p>Alternative targets are proposed off-chain. Fe controls their eligibility.</p></div><span id="incidentStatus" class="status loading">NOT ASSESSED</span></div>
+              <div class="incident-summary" id="incidentSummary">Choose an alert and compare the options available from the current Fe state.</div>
+              <div class="incident-options" id="incidentOptions"><div class="planner-empty">No assessment performed yet.</div></div>
+              <div id="incidentDecision" class="incident-decision">Select a Fe-verified option to review its expected terminal allocation.</div>
+              <button id="incidentCommitBtn" class="primary-btn" disabled type="button">Commit selected Fe response →</button>
+              <div id="incidentMessage" class="result-message" aria-live="polite">No incident-response transaction submitted.</div>
+            </section>
+          </div>
+          <section class="panel incident-explainer">
+            <h3>What this decision protects</h3>
+            <div class="incident-explain-grid">
+              <div><strong>Exposure containment</strong><p>Fe verifies the affected market's exposure against the operator-entered incident limit during preview and again during the atomic commit. A guardian installs a persistent Fe obligation; operators cannot silently weaken or remove it.</p></div>
+              <div><strong>Fe policy enforcement</strong><p>The compiled Fe contract checks operation preconditions, version and signer, and its fixed final-state invariants. Temporary intermediate breaches are not final approvals.</p></div>
+              <div><strong>Exact-outcome commitment</strong><p>Fe <code>commitGoalActions()</code> asserts the chosen terminal state in the atomic transaction. The server re-assesses the alert before sending any transaction.</p></div>
+            </div>
+            <button type="button" class="text-btn" data-page="history">Inspect incident execution evidence →</button>
+          </section>
+        </section>
+        <section id="catalogView" class="view-panel" hidden>
+          <div class="eyebrow">POLICY CATALOG <span class="eyebrow-line"></span> CONTRACT-DEFINED</div>
+          <h1 class="view-title">Know every constraint.<br><span>Before making a change.</span></h1>
+          <p class="view-description">These are the active limits returned by the deployed Fe contract. Policy verdicts come only from Fe bytecode, never a duplicated JavaScript policy.</p>
+          <div class="catalog-intro panel"><div><small>Active configuration</small><strong>Version <span id="catalogVersion">—</span></strong></div><div><small>Configured operator</small><code id="catalogOperator">—</code></div></div>
+          <div class="catalog-grid">
+            <article class="panel catalog-item"><div class="catalog-head"><span class="catalog-bit">01</span><h3>Global allocation capacity</h3></div><p>Core + Supporting + Satellite allocations must not exceed the global policy capacity.</p><strong id="catalogBudget">— units</strong></article>
+            <article class="panel catalog-item"><div class="catalog-head"><span class="catalog-bit">02</span><h3>Per-market ceilings</h3></div><p>Every market's allocation must remain within its individual ceiling.</p><strong id="catalogCaps">—</strong></article>
+            <article class="panel catalog-item"><div class="catalog-head"><span class="catalog-bit">04</span><h3>Protected reserve</h3></div><p>Total allocation plus protected reserve must not exceed the policy budget.</p><strong id="catalogReserveFloor">— units</strong></article>
+            <article class="panel catalog-item"><div class="catalog-head"><span class="catalog-bit">08</span><h3>Paired market exposure</h3></div><p>Core market may not exceed twice the Supporting market. This links both parameters in one invariant.</p><strong id="catalogPaired">—</strong></article>
+            <article class="panel catalog-item"><div class="catalog-head"><span class="catalog-bit">16</span><h3>Optimistic version guard</h3></div><p>A draft based on an old version is rejected instead of silently overwriting an updated configuration.</p><strong id="catalogExpected">Expected current v—</strong></article>
+            <article class="panel catalog-item"><div class="catalog-head"><span class="catalog-bit">32</span><h3>Input safety ceiling</h3></div><p>Each proposed number is bounded before arithmetic, so large inputs cannot overflow the evaluation.</p><strong id="catalogInputCeiling">—</strong></article>
+          </div>
+          <section class="panel catalog-foot"><h3>Two distinct layers of protection</h3><p><strong>Policy correctness:</strong> Fe evaluates the configuration constraints, including guard-on-scope-exit. <strong>Operator authorization:</strong> <code>canCommit()</code> executes as the selected local signer and checks against the administrator held by Fe. The demo role selector is not real-user authentication.</p><button type="button" class="text-btn" data-page="desk">Return to configuration desk →</button></section>
+        </section>
+        <section id="historyView" class="view-panel" hidden>
+          <div class="eyebrow">EXECUTION HISTORY <span class="eyebrow-line"></span> LOCAL EVM</div>
+          <h1 class="view-title">Every attempted change.<br><span>A visible explanation.</span></h1>
+          <p class="view-description">Successful and rejected transactions are recorded with their local EVM transaction hashes, version transitions, inputs, execution gas and outcome reasons. Earlier sessions are retained but do not share the current in-memory chain state.</p>
+          <div class="history-toolbar panel"><div><strong id="auditCount">—</strong><small id="auditStatus">Journal verifying…</small></div><div class="history-tools"><label for="historyFilter">Show</label><select id="historyFilter"><option value="all">All sessions</option><option value="current">Current session</option></select><a href="/api/history/export" class="download-link" download="covenant-control-local-audit.json">Export audit JSON</a></div></div>
+          <div class="panel history-full"><div class="panel-top"><div><h3>Signed sandbox transactions</h3><p id="activeSessionLabel">Current session initializing…</p></div><span class="panel-chip">HASH-LINKED LOCAL JOURNAL</span></div><div id="historyTimeline" class="history-timeline"><div class="empty-history">No transactions recorded yet.</div></div></div>
+          <p class="disclosure">The JSONL audit journal detects accidental alteration when reloaded, but it is not tamper-proof: someone controlling the local files can rewrite it. The page shows the latest 500 transactions; the export includes the full journal. Transaction hashes reference this isolated EVM only; they are not public blockchain explorer links. The demo accounts are disposable and must never receive funds.</p>
+        </section>
+        <footer><span>Covenant Control · Fe Builders Challenge prototype</span><span>Fe 26.5.0 · No real funds · Local EVM only</span></footer>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,6 @@
+[ingot]
+name = "covenant_governance_registry"
+version = "0.3.0"
+
+[dependencies]
+covenant_transition = { path = "../../library/covenant_transition" }

@@ -1,0 +1,1060 @@
+// Covenant Control v1.7: Fe-attested goal-driven operations, semantic operations, and migrations.
+// Fe 26.5.0. No tokens, funds, or external calls.
+// Policy evaluation is ONE function used by preview and guarded commit.
+use std::abi::sol
+use std::evm::{Address, Ctx, Evm, Call}
+
+const INPUT_CEILING: u256 = 1000000
+
+struct Policy {
+    version: u256,
+    a: u256,
+    b: u256,
+    c: u256,
+    budget: u256,
+    reserve_floor: u256,
+    cap_a: u256,
+    cap_b: u256,
+    cap_c: u256,
+}
+impl Copy for Policy {}
+
+// Diagnostic flags. Several reasons may apply simultaneously:
+// 1=TOTAL_CAP, 2=MARKET_CAP, 4=RESERVE_FLOOR,
+// 8=PAIRED_EXPOSURE, 16=STALE_VERSION (preview only),
+// 32=INPUT_CEILING. No unchecked arithmetic is needed.
+fn policy_violations(_ p: Policy) -> u256 {
+    if p.a > INPUT_CEILING || p.b > INPUT_CEILING || p.c > INPUT_CEILING {
+        return 32
+    }
+    let used = p.a + p.b + p.c
+    var reasons: u256 = 0
+    if used > p.budget { reasons += 1 }
+    if p.a > p.cap_a || p.b > p.cap_b || p.c > p.cap_c { reasons += 2 }
+    if used + p.reserve_floor > p.budget { reasons += 4 }
+    // Market A must be supported by at least half its exposure in market B.
+    if p.a > p.b * 2 { reasons += 8 }
+    reasons
+}
+
+fn proposed(_ before: Policy, _ a: u256, _ b: u256, _ c: u256) -> Policy {
+    Policy {
+        version: before.version + 1,
+        a, b, c,
+        budget: before.budget,
+        reserve_floor: before.reserve_floor,
+        cap_a: before.cap_a,
+        cap_b: before.cap_b,
+        cap_c: before.cap_c,
+    }
+}
+
+// The sole state-edit primitive for staged migrations. The same helper
+// drives pure preview and guarded on-chain commit; there is no JS policy copy.
+fn set_market(_ state: mut Policy, _ market: u256, _ value: u256) {
+    assert!(market < 3)
+    // Input-domain bounds apply to EACH instruction, even if a later step
+    // overwrites that market. Cross-field rules remain final-state checks.
+    assert!(value <= INPUT_CEILING)
+    if market == 0 { state.a = value }
+    else if market == 1 { state.b = value }
+    else { state.c = value }
+}
+
+// A pure view of a staged migration. Intermediate checks are descriptive;
+// only the FINAL state must be healthy for one atomic guarded commit.
+fn stage_migration(
+    _ starting: Policy, _ count: u256,
+    _ m1: u256, _ v1: u256, _ m2: u256, _ v2: u256,
+    _ m3: u256, _ v3: u256,
+) -> (Policy, u256, u256, u256) {
+    assert!(count >= 1 && count <= 3)
+    var draft = starting
+    set_market(mut draft, m1, v1)
+    let first = policy_violations(draft)
+    var second: u256 = 0
+    var third: u256 = 0
+    if count >= 2 {
+        set_market(mut draft, m2, v2)
+        second = policy_violations(draft)
+    }
+    if count >= 3 {
+        set_market(mut draft, m3, v3)
+        third = policy_violations(draft)
+    }
+    draft.version += 1
+    (draft, first, second, third)
+}
+
+// --- v1.4: semantic operational migrations ---
+// Opcodes  0..8 : transfer from opcode / 3 to opcode % 3.
+//          9..11: retire a market's allocation into the unallocated pool.
+//         12..14: issue capacity from the unallocated pool to a market.
+//         15..17: assert an expected market allocation at THIS exact step.
+// The opcode is a compact wire encoding. Fe, NOT JavaScript, applies and
+// validates all operations against the state produced by earlier steps.
+// Operation failures are codes: 1 bad opcode, 2 invalid positive amount,
+// 3 same-market transfer, 4 insufficient source, 5 insufficient free budget,
+// 6 failed state precondition, 7 destination would exceed input ceiling.
+// Preview returns (failed step number * 16 + failure code). Commit reverts.
+fn read_market(_ state: Policy, _ market: u256) -> u256 {
+    if market == 0 { state.a }
+    else if market == 1 { state.b }
+    else { state.c }
+}
+
+fn write_market(_ state: mut Policy, _ market: u256, _ value: u256) {
+    if market == 0 { state.a = value }
+    else if market == 1 { state.b = value }
+    else { state.c = value }
+}
+
+fn apply_action(_ state: mut Policy, _ opcode: u256, _ amount: u256) -> u256 {
+    if opcode >= 18 { return 1 }
+    if amount > INPUT_CEILING { return 2 }
+    if opcode < 9 {
+        if amount == 0 { return 2 }
+        let from = opcode / 3
+        let to = opcode % 3
+        if from == to { return 3 }
+        let available = read_market(state, from)
+        if available < amount { return 4 }
+        let destination = read_market(state, to)
+        if destination + amount > INPUT_CEILING { return 7 }
+        write_market(mut state, from, available - amount)
+        write_market(mut state, to, destination + amount)
+        return 0
+    }
+    if opcode < 12 {
+        if amount == 0 { return 2 }
+        let market = opcode - 9
+        let available = read_market(state, market)
+        if available < amount { return 4 }
+        write_market(mut state, market, available - amount)
+        return 0
+    }
+    if opcode < 15 {
+        if amount == 0 { return 2 }
+        let market = opcode - 12
+        let current = read_market(state, market)
+        if current + amount > INPUT_CEILING { return 7 }
+        let used = state.a + state.b + state.c
+        // Strict resource constraint at EVERY instruction, independently of
+        // the end-of-scope reserve floor and correlated market restrictions.
+        if used > state.budget || used + amount > state.budget { return 5 }
+        write_market(mut state, market, current + amount)
+        return 0
+    }
+    // State assertion: no mutation. A later step cannot satisfy it retroactively.
+    let market = opcode - 15
+    if read_market(state, market) != amount { return 6 }
+    0
+}
+
+fn stage_actions(
+    _ starting: Policy, _ count: u256,
+    _ o1: u256, _ n1: u256, _ o2: u256, _ n2: u256,
+    _ o3: u256, _ n3: u256,
+) -> (Policy, u256, u256, u256, u256) {
+    assert!(count >= 1 && count <= 3)
+    var draft = starting
+    let e1 = apply_action(mut draft, o1, n1)
+    if e1 != 0 { return (draft, policy_violations(draft), 0, 0, 16 + e1) }
+    let m1 = policy_violations(draft)
+    var m2: u256 = 0
+    var m3: u256 = 0
+    if count >= 2 {
+        let e2 = apply_action(mut draft, o2, n2)
+        if e2 != 0 { return (draft, m1, policy_violations(draft), 0, 32 + e2) }
+        m2 = policy_violations(draft)
+    }
+    if count >= 3 {
+        let e3 = apply_action(mut draft, o3, n3)
+        if e3 != 0 { return (draft, m1, m2, policy_violations(draft), 48 + e3) }
+        m3 = policy_violations(draft)
+    }
+    (draft, m1, m2, m3, 0)
+}
+
+// --- v1.7: incident-objective checks owned by Fe, not the planner. ---
+// Independent incident bits: 1=affected market above declared maximum,
+// 2=actual unallocated reserve below declared minimum, 4=bad incident
+// specification (invalid market/limit or reserve below native policy floor).
+// These are applied to the actual candidate produced by ordered operations.
+fn incident_violations(_ state: Policy, _ market: u256, _ maximum: u256, _ reserve: u256) -> u256 {
+    if market >= 3 || maximum > INPUT_CEILING || reserve > state.budget || reserve < state.reserve_floor { return 4 }
+    var mask: u256 = 0
+    if read_market(state, market) > maximum { mask += 1 }
+    let allocated = state.a + state.b + state.c
+    if allocated > state.budget || allocated + reserve > state.budget { mask += 2 }
+    mask
+}
+
+impl Policy {
+    // Key Fe feature: postcondition is enforced when the temporary mutable
+    // proposal's last access ends (including ordinary early returns).
+    fn guarded_edit(mut self) -> mut Policy {
+        var candidate = self
+        yield mut candidate
+        assert!(policy_violations(candidate) == 0)
+        self = candidate
+    }
+}
+
+fn early_finish(_ policy: mut Policy, _ candidate: Policy) {
+    let edit = mut policy.guarded_edit()
+    edit = candidate
+    return
+}
+
+msg ControlMsg {
+    #[selector = sol("snapshot()")]
+    Snapshot -> (u256, u256, u256, u256, u256, u256, u256, u256, u256),
+    #[selector = sol("operator()")]
+    Operator -> Address,
+    #[selector = sol("policyConstants()")]
+    PolicyConstants -> (u256, u256),
+    #[selector = sol("canCommit()")]
+    CanCommit -> bool,
+    #[selector = sol("preview(uint256,uint256,uint256,uint256)")]
+    Preview { expected_version: u256, a: u256, b: u256, c: u256 } -> (u256, u256, u256, u256),
+    #[selector = sol("commit(uint256,uint256,uint256,uint256)")]
+    Commit { expected_version: u256, a: u256, b: u256, c: u256 } -> u256,
+    // Three ordered edit operations, committed as exactly ONE state transition.
+    // Market ids: 0=Core, 1=Supporting, 2=Satellite.
+    #[selector = sol("previewMigration(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    PreviewMigration {
+        expected_version: u256, count: u256,
+        m1: u256, v1: u256, m2: u256, v2: u256, m3: u256, v3: u256,
+    } -> (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256),
+    #[selector = sol("commitMigration(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    CommitMigration {
+        expected_version: u256, count: u256,
+        m1: u256, v1: u256, m2: u256, v2: u256, m3: u256, v3: u256,
+    } -> u256,
+    // Semantic operations: MOVE, RETIRE, ISSUE, EXPECT. The same Fe
+    // apply_action() performs every step for both preview and guarded commit.
+    #[selector = sol("previewActions(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    PreviewActions {
+        expected_version: u256, count: u256,
+        o1: u256, n1: u256, o2: u256, n2: u256, o3: u256, n3: u256,
+    } -> (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256,u256),
+    #[selector = sol("commitActions(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    CommitActions {
+        expected_version: u256, count: u256,
+        o1: u256, n1: u256, o2: u256, n2: u256, o3: u256, n3: u256,
+    } -> u256,
+    // Goal-attested action commitment: the supplied target MUST equal the
+    // post-operation state. Policy and goal both hold in one atomic transaction.
+    #[selector = sol("commitGoalActions(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    CommitGoalActions {
+        expected_version: u256, count: u256,
+        o1: u256, n1: u256, o2: u256, n2: u256, o3: u256, n3: u256,
+        target_a: u256, target_b: u256, target_c: u256,
+    } -> u256,
+    // Incident-specific Fe preview. Unlike UI policy badges, this evaluates
+    // the *ordered operations*, exact target, and operator-provided incident
+    // limits using compiled Fe. Mask bits are separate from policy flags.
+    #[selector = sol("previewIncidentActions(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    PreviewIncidentActions {
+        expected_version: u256, count: u256,
+        o1: u256, n1: u256, o2: u256, n2: u256, o3: u256, n3: u256,
+        target_a: u256, target_b: u256, target_c: u256,
+        incident_market: u256, exposure_max: u256, reserve_min: u256,
+    } -> (u256,u256,u256,bool,u256,u256,u256),
+    // Incident-attested commitment: a valid ordinary goal is NOT sufficient.
+    // The chosen incident limits must also hold for the resulting Fe state.
+    #[selector = sol("commitIncidentActions(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    CommitIncidentActions {
+        expected_version: u256, count: u256,
+        o1: u256, n1: u256, o2: u256, n2: u256, o3: u256, n3: u256,
+        target_a: u256, target_b: u256, target_c: u256,
+        incident_market: u256, exposure_max: u256, reserve_min: u256,
+    } -> u256,
+    // Negative test: an early return cannot evade the projection finalizer.
+    #[selector = sol("earlyInvalid(uint256,uint256,uint256,uint256)")]
+    EarlyInvalid { expected_version: u256, a: u256, b: u256, c: u256 },
+}
+
+pub contract CovenantControl uses (ctx: Ctx) {
+    mut admin: Address,
+    mut policy: Policy,
+
+    init() uses (mut admin, mut policy, ctx) {
+        admin = ctx.caller()
+        policy = Policy {
+            version: 1,
+            a: 400,
+            b: 300,
+            c: 100,
+            budget: 1000,
+            reserve_floor: 100,
+            cap_a: 550,
+            cap_b: 500,
+            cap_c: 350,
+        }
+    }
+
+    recv ControlMsg {
+        Snapshot -> (u256, u256, u256, u256, u256, u256, u256, u256, u256) uses (policy) {
+            (policy.version, policy.a, policy.b, policy.c, policy.budget,
+             policy.reserve_floor, policy.cap_a, policy.cap_b, policy.cap_c)
+        }
+        Operator -> Address uses (admin) { admin }
+        PolicyConstants -> (u256, u256) { (INPUT_CEILING, 2) }
+        CanCommit -> bool uses (admin, ctx) { ctx.caller() == admin }
+        Preview { expected_version, a, b, c } -> (u256, u256, u256, u256) uses (policy) {
+            // Both preview and commit use proposed() + policy_violations().
+            let next = proposed(policy, a, b, c)
+            var flags = policy_violations(next)
+            if expected_version != policy.version { flags += 16 }
+            if flags >= 32 { return (flags, next.version, 0, 0) }
+            let total = a + b + c
+            let remaining = if total <= policy.budget { policy.budget - total } else { 0 }
+            (flags, next.version, total, remaining)
+        }
+        Commit { expected_version, a, b, c } -> u256 uses (admin, mut policy, ctx) {
+            assert!(ctx.caller() == admin)
+            assert!(expected_version == policy.version)
+            let next = proposed(policy, a, b, c)
+            let edit = mut policy.guarded_edit()
+            edit = next
+            policy.version
+        }
+        PreviewMigration { expected_version, count, m1, v1, m2, v2, m3, v3 }
+            -> (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256) uses (policy) {
+            let (next, first, second, third) = stage_migration(policy, count, m1, v1, m2, v2, m3, v3)
+            var flags = policy_violations(next)
+            if expected_version != policy.version { flags += 16 }
+            if flags >= 32 {
+                return (flags, next.version, 0, 0, first, second, third, next.a, next.b, next.c)
+            }
+            let total = next.a + next.b + next.c
+            let remaining = if total <= next.budget { next.budget - total } else { 0 }
+            (flags, next.version, total, remaining, first, second, third, next.a, next.b, next.c)
+        }
+        CommitMigration { expected_version, count, m1, v1, m2, v2, m3, v3 } -> u256
+            uses (admin, mut policy, ctx) {
+            assert!(ctx.caller() == admin)
+            assert!(expected_version == policy.version)
+            assert!(count >= 1 && count <= 3)
+            let next_version = policy.version + 1
+            // Unlike precomputing a final proposal, this genuinely mutates the
+            // grant step-by-step. Intermediate states may violate constraints;
+            // the Fe projection slide validates the whole candidate at exit.
+            let edit = mut policy.guarded_edit()
+            edit.version = next_version
+            set_market(mut edit, m1, v1)
+            if count >= 2 { set_market(mut edit, m2, v2) }
+            if count >= 3 { set_market(mut edit, m3, v3) }
+            policy.version
+        }
+        PreviewActions { expected_version, count, o1, n1, o2, n2, o3, n3 }
+            -> (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256,u256) uses (policy) {
+            let (partial, first, second, third, operation_error) =
+                stage_actions(policy, count, o1, n1, o2, n2, o3, n3)
+            var next = partial
+            next.version += 1
+            var flags = policy_violations(next)
+            if expected_version != policy.version { flags += 16 }
+            if operation_error != 0 { flags += 64 }
+            if flags >= 32 {
+                return (flags, next.version, 0, 0, first, second, third,
+                        next.a, next.b, next.c, operation_error)
+            }
+            let total = next.a + next.b + next.c
+            let remaining = if total <= next.budget { next.budget - total } else { 0 }
+            (flags, next.version, total, remaining, first, second, third,
+             next.a, next.b, next.c, operation_error)
+        }
+        CommitActions { expected_version, count, o1, n1, o2, n2, o3, n3 } -> u256
+            uses (admin, mut policy, ctx) {
+            assert!(ctx.caller() == admin)
+            assert!(expected_version == policy.version)
+            assert!(count >= 1 && count <= 3)
+            let next_version = policy.version + 1
+            let edit = mut policy.guarded_edit()
+            edit.version = next_version
+            // Each instruction has its own operation-level preconditions.
+            // Cross-market policy is checked by the slide on scope exit.
+            assert!(apply_action(mut edit, o1, n1) == 0)
+            if count >= 2 { assert!(apply_action(mut edit, o2, n2) == 0) }
+            if count >= 3 { assert!(apply_action(mut edit, o3, n3) == 0) }
+            policy.version
+        }
+        CommitGoalActions {
+            expected_version, count, o1, n1, o2, n2, o3, n3,
+            target_a, target_b, target_c,
+        } -> u256 uses (admin, mut policy, ctx) {
+            assert!(ctx.caller() == admin)
+            assert!(expected_version == policy.version)
+            assert!(count >= 1 && count <= 3)
+            // Runtime authorization, operation preconditions, goal equality,
+            // and the Fe projection postcondition are independent safeguards.
+            let next_version = policy.version + 1
+            let edit = mut policy.guarded_edit()
+            edit.version = next_version
+            assert!(apply_action(mut edit, o1, n1) == 0)
+            if count >= 2 { assert!(apply_action(mut edit, o2, n2) == 0) }
+            if count >= 3 { assert!(apply_action(mut edit, o3, n3) == 0) }
+            assert!(edit.a == target_a && edit.b == target_b && edit.c == target_c)
+            policy.version
+        }
+        PreviewIncidentActions {
+            expected_version, count, o1, n1, o2, n2, o3, n3,
+            target_a, target_b, target_c, incident_market, exposure_max, reserve_min,
+        } -> (u256,u256,u256,bool,u256,u256,u256) uses (policy) {
+            let (partial, _, _, _, operation_error) =
+                stage_actions(policy, count, o1, n1, o2, n2, o3, n3)
+            var candidate = partial
+            candidate.version += 1
+            var flags = policy_violations(candidate)
+            if expected_version != policy.version { flags += 16 }
+            if operation_error != 0 { flags += 64 }
+            let incident_mask = incident_violations(candidate, incident_market, exposure_max, reserve_min)
+            let matches = candidate.a == target_a && candidate.b == target_b && candidate.c == target_c
+            (flags, operation_error, incident_mask, matches, candidate.a, candidate.b, candidate.c)
+        }
+        CommitIncidentActions {
+            expected_version, count, o1, n1, o2, n2, o3, n3,
+            target_a, target_b, target_c, incident_market, exposure_max, reserve_min,
+        } -> u256 uses (admin, mut policy, ctx) {
+            assert!(ctx.caller() == admin)
+            assert!(expected_version == policy.version)
+            assert!(count >= 1 && count <= 3)
+            let next_version = policy.version + 1
+            let edit = mut policy.guarded_edit()
+            edit.version = next_version
+            assert!(apply_action(mut edit, o1, n1) == 0)
+            if count >= 2 { assert!(apply_action(mut edit, o2, n2) == 0) }
+            if count >= 3 { assert!(apply_action(mut edit, o3, n3) == 0) }
+            assert!(edit.a == target_a && edit.b == target_b && edit.c == target_c)
+            assert!(incident_violations(edit, incident_market, exposure_max, reserve_min) == 0)
+            policy.version
+        }
+        EarlyInvalid { expected_version, a, b, c } uses (admin, mut policy, ctx) {
+            assert!(ctx.caller() == admin)
+            assert!(expected_version == policy.version)
+            let next = proposed(policy, a, b, c)
+            early_finish(mut policy, next)
+        }
+    }
+}
+
+// Synthetic attack contract. The caller inside CovenantControl is this
+// contract, not the authorized test harness/deployer.
+msg RogueMsg {
+    #[selector = sol("attempt(address,uint256,uint256,uint256,uint256)")]
+    Attempt { target: Address, version: u256, a: u256, b: u256, c: u256 } -> bool,
+}
+
+pub contract RogueOperator uses (call: mut Call) {
+    recv RogueMsg {
+        Attempt { target, version, a, b, c } -> bool uses (mut call) {
+            let outcome = call.try_call(
+                addr: target,
+                gas: 500000,
+                value: Wei::zero(),
+                message: ControlMsg::Commit { expected_version: version, a, b, c },
+            )
+            outcome.success()
+        }
+    }
+}
+
+#[test]
+fn preview_and_commit_agree() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value: Wei::zero(), args: (), salt: 1)
+    let preview: (u256, u256, u256, u256) = evm.call(
+        addr: c, gas: 1000000, value: Wei::zero(),
+        message: ControlMsg::Preview { expected_version: 1, a: 350, b: 350, c: 150 },
+    )
+    assert!(preview == (0, 2, 850, 150))
+    let version: u256 = evm.call(
+        addr: c, gas: 1000000, value: Wei::zero(),
+        message: ControlMsg::Commit { expected_version: 1, a: 350, b: 350, c: 150 },
+    )
+    assert!(version == 2)
+    let state: (u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr: c, gas: 1000000, value: Wei::zero(), message: ControlMsg::Snapshot {},
+    )
+    assert!(state.0 == 2 && state.1 == 350 && state.2 == 350 && state.3 == 150)
+}
+
+#[test]
+fn rejected_over_budget_rolls_back() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value: Wei::zero(), args: (), salt: 2)
+    let p: (u256,u256,u256,u256) = evm.call(
+        addr:c, gas:1000000, value:Wei::zero(),
+        message: ControlMsg::Preview { expected_version:1, a:500,b:450,c:300 },
+    )
+    assert!(p.0 == 5)
+    let result = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message: ControlMsg::Commit { expected_version:1,a:500,b:450,c:300 })
+    assert!(!result.success())
+    let s: (u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:ControlMsg::Snapshot {})
+    assert!(s.0 == 1 && s.1 == 400 && s.2 == 300 && s.3 == 100)
+}
+
+#[test]
+fn per_market_cap_rejects() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:3)
+    let p: (u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::Preview {expected_version:1,a:560,b:300,c:40})
+    assert!(p.0 == 2)
+}
+
+#[test]
+fn paired_exposure_rejects() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:4)
+    let p: (u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::Preview {expected_version:1,a:500,b:100,c:100})
+    assert!(p.0 == 8)
+    let r = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::Commit {expected_version:1,a:500,b:100,c:100})
+    assert!(!r.success())
+}
+
+#[test]
+fn reserve_floor_rejects_without_exceeding_total() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:5)
+    let p: (u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::Preview {expected_version:1,a:450,b:400,c:120})
+    assert!(p.0 == 4)
+}
+
+#[test]
+fn stale_version_rejects_and_preserves_state() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:6)
+    let _: u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::Commit {expected_version:1,a:350,b:350,c:150})
+    let p: (u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::Preview {expected_version:1,a:350,b:350,c:150})
+    assert!(p.0 == 16)
+    let failed = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::Commit {expected_version:1,a:350,b:350,c:150})
+    assert!(!failed.success())
+}
+
+#[test]
+fn early_return_cannot_skip_postcondition() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:7)
+    let failed = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::EarlyInvalid {expected_version:1,a:500,b:100,c:100})
+    assert!(!failed.success())
+    let s: (u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:ControlMsg::Snapshot {})
+    assert!(s.0 == 1 && s.1 == 400)
+}
+
+#[test]
+fn unauthorized_contract_cannot_commit() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:8)
+    let attacker = evm.create2<RogueOperator>(value:Wei::zero(),args:(),salt:9)
+    let allowed: bool = evm.call(addr:attacker,gas:1000000,value:Wei::zero(),
+        message:RogueMsg::Attempt {target:c,version:1,a:350,b:350,c:150})
+    assert!(!allowed)
+    let s: (u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:ControlMsg::Snapshot {})
+    assert!(s.0 == 1 && s.1 == 400)
+}
+
+#[test]
+fn ceiling_rejects_extreme_input_without_arithmetic_overflow() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:10)
+    let p: (u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::Preview {expected_version:1,a:u256::max(),b:0,c:0})
+    assert!(p.0 == 32)
+}
+
+#[test]
+fn read_only_previews_cannot_change_version() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:11)
+    let _: (u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::Preview {expected_version:1,a:350,b:350,c:150})
+    let s: (u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:ControlMsg::Snapshot {})
+    assert!(s.0 == 1 && s.1 == 400)
+}
+
+// --- v1.3: staged migration acceptance and adversarial regression tests ---
+#[test]
+fn migration_unhealthy_intermediates_end_healthy() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value: Wei::zero(), args: (), salt: 30)
+    // Step 1: Core=550 causes reserve violation (950 used, <100 left).
+    // Step 2: Supporting=200 causes pair violation (550 > 2*200).
+    // Step 3: Core=350 clears all constraints.
+    let p: (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::PreviewMigration {
+            expected_version:1,count:3,m1:0,v1:550,m2:1,v2:200,m3:0,v3:350,
+        })
+    assert!(p.0 == 0 && p.1 == 2 && p.2 == 650 && p.3 == 350)
+    assert!(p.4 == 4 && p.5 == 8 && p.6 == 0)
+    assert!(p.7 == 350 && p.8 == 200 && p.9 == 100)
+    let version: u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitMigration {
+            expected_version:1,count:3,m1:0,v1:550,m2:1,v2:200,m3:0,v3:350,
+        })
+    assert!(version == 2)
+    let state: (u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:ControlMsg::Snapshot {})
+    assert!(state.0 == 2 && state.1 == 350 && state.2 == 200 && state.3 == 100)
+}
+
+#[test]
+fn migration_rejected_final_rolls_back_all_stages() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:31)
+    let p: (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::PreviewMigration {
+            expected_version:1,count:3,m1:0,v1:550,m2:1,v2:200,m3:0,v3:500,
+        })
+    assert!(p.0 == 8 && p.4 == 4 && p.5 == 8 && p.6 == 8)
+    let result = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitMigration {
+            expected_version:1,count:3,m1:0,v1:550,m2:1,v2:200,m3:0,v3:500,
+        })
+    assert!(!result.success())
+    let state: (u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:ControlMsg::Snapshot {})
+    assert!(state.0 == 1 && state.1 == 400 && state.2 == 300 && state.3 == 100)
+}
+
+#[test]
+fn migration_repeated_market_and_one_step() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:32)
+    let p: (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::PreviewMigration {
+            expected_version:1,count:1,m1:2,v1:180,m2:0,v2:0,m3:0,v3:0,
+        })
+    assert!(p.0 == 0 && p.4 == 0 && p.5 == 0 && p.6 == 0)
+    assert!(p.7 == 400 && p.8 == 300 && p.9 == 180)
+    let version: u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitMigration {
+            expected_version:1,count:1,m1:2,v1:180,m2:0,v2:0,m3:0,v3:0,
+        })
+    assert!(version == 2)
+}
+
+#[test]
+fn migration_rejects_stale_version_and_preserves_state() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:33)
+    let _: u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitMigration {
+            expected_version:1,count:1,m1:2,v1:120,m2:0,v2:0,m3:0,v3:0,
+        })
+    let p: (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::PreviewMigration {
+            expected_version:1,count:1,m1:0,v1:350,m2:0,v2:0,m3:0,v3:0,
+        })
+    assert!(p.0 == 16)
+    let failed = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitMigration {
+            expected_version:1,count:1,m1:0,v1:350,m2:0,v2:0,m3:0,v3:0,
+        })
+    assert!(!failed.success())
+    let state: (u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:ControlMsg::Snapshot {})
+    assert!(state.0 == 2 && state.1 == 400 && state.2 == 300 && state.3 == 120)
+}
+
+#[test]
+fn migration_requires_valid_step_count_and_market() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:34)
+    let no_steps = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitMigration {
+            expected_version:1,count:0,m1:0,v1:350,m2:0,v2:0,m3:0,v3:0,
+        })
+    assert!(!no_steps.success())
+    let invalid_market = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitMigration {
+            expected_version:1,count:1,m1:3,v1:350,m2:0,v2:0,m3:0,v3:0,
+        })
+    assert!(!invalid_market.success())
+    let excessive_step = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitMigration {
+            expected_version:1,count:2,m1:0,v1:1000001,m2:0,v2:350,m3:0,v3:0,
+        })
+    assert!(!excessive_step.success())
+}
+
+// --- v1.4: semantic operation behavior ---
+// Preset: retire 250 Core, issue 250 Supporting, move 100 Supporting -> Core.
+// Fe stage masks = 0 -> 2 -> 0. Final = 250 / 450 / 100.
+// Reordering the first two instructions fails at operation level: insufficient
+// unallocated budget to issue 250 before retiring capacity.
+#[test]
+fn actions_retire_issue_transfer_atomically() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:41)
+    let p: (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:ControlMsg::PreviewActions {
+            expected_version:1,count:3,o1:9,n1:250,o2:13,n2:250,o3:3,n3:100,
+        })
+    assert!(p.0 == 0 && p.1 == 2 && p.4 == 0 && p.5 == 2 && p.6 == 0)
+    assert!(p.7 == 250 && p.8 == 450 && p.9 == 100 && p.10 == 0)
+    let v: u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitActions {
+            expected_version:1,count:3,o1:9,n1:250,o2:13,n2:250,o3:3,n3:100,
+        })
+    assert!(v == 2)
+    let s: (u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:ControlMsg::Snapshot {})
+    assert!(s.0 == 2 && s.1 == 250 && s.2 == 450 && s.3 == 100)
+}
+
+#[test]
+fn actions_reordering_is_a_genuine_operation_failure() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:42)
+    let p: (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:ControlMsg::PreviewActions {
+            expected_version:1,count:3,o1:13,n1:250,o2:9,n2:250,o3:3,n3:100,
+        })
+    assert!(p.0 == 64 && p.10 == 21 && p.7 == 400 && p.8 == 300)
+    let rejected = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitActions {
+            expected_version:1,count:3,o1:13,n1:250,o2:9,n2:250,o3:3,n3:100,
+        })
+    assert!(!rejected.success())
+    let s: (u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:ControlMsg::Snapshot {})
+    assert!(s.0 == 1 && s.1 == 400 && s.2 == 300)
+}
+
+#[test]
+fn actions_bad_final_policy_reverts_every_stage() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:43)
+    let p: (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:ControlMsg::PreviewActions {
+            expected_version:1,count:3,o1:9,n1:250,o2:13,n2:250,o3:16,n3:550,
+        })
+    assert!(p.0 == 2 && p.10 == 0 && p.5 == 2 && p.6 == 2)
+    let rejected = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitActions {
+            expected_version:1,count:3,o1:9,n1:250,o2:13,n2:250,o3:16,n3:550,
+        })
+    assert!(!rejected.success())
+    let s: (u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:ControlMsg::Snapshot {})
+    assert!(s.0 == 1 && s.1 == 400 && s.2 == 300)
+}
+
+#[test]
+fn actions_insufficient_transfer_and_same_market_rejected() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:44)
+    let p: (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:ControlMsg::PreviewActions {
+            expected_version:1,count:1,o1:6,n1:150,o2:0,n2:0,o3:0,n3:0,
+        })
+    assert!(p.0 == 64 && p.10 == 20)
+    let q: (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:ControlMsg::PreviewActions {
+            expected_version:1,count:1,o1:0,n1:10,o2:0,n2:0,o3:0,n3:0,
+        })
+    assert!(q.0 == 64 && q.10 == 19)
+}
+
+#[test]
+fn actions_expected_state_is_checked_in_order() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:45)
+    let p: (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:ControlMsg::PreviewActions {
+            expected_version:1,count:2,o1:1,n1:50,o2:15,n2:400,o3:0,n3:0,
+        })
+    assert!(p.0 == 64 && p.10 == 38 && p.7 == 350 && p.8 == 350)
+    let q: (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:ControlMsg::PreviewActions {
+            expected_version:1,count:2,o1:15,n1:400,o2:1,n2:50,o3:0,n3:0,
+        })
+    assert!(q.0 == 0 && q.10 == 0 && q.7 == 350 && q.8 == 350)
+}
+
+#[test]
+fn actions_stale_version_does_not_commit() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:46)
+    let _: u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitActions {
+            expected_version:1,count:1,o1:9,n1:50,o2:0,n2:0,o3:0,n3:0,
+        })
+    let p: (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:ControlMsg::PreviewActions {
+            expected_version:1,count:1,o1:9,n1:50,o2:0,n2:0,o3:0,n3:0,
+        })
+    assert!(p.0 == 16)
+    let failed = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitActions {
+            expected_version:1,count:1,o1:9,n1:50,o2:0,n2:0,o3:0,n3:0,
+        })
+    assert!(!failed.success())
+}
+
+#[test]
+fn actions_invalid_opcode_and_zero_quantity_cannot_commit() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:47)
+    let p: (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:ControlMsg::PreviewActions {
+            expected_version:1,count:1,o1:18,n1:1,o2:0,n2:0,o3:0,n3:0,
+        })
+    assert!(p.0 == 64 && p.10 == 17)
+    let q: (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:ControlMsg::PreviewActions {
+            expected_version:1,count:1,o1:9,n1:0,o2:0,n2:0,o3:0,n3:0,
+        })
+    assert!(q.0 == 64 && q.10 == 18)
+    let failed = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitActions {
+            expected_version:1,count:1,o1:18,n1:1,o2:0,n2:0,o3:0,n3:0,
+        })
+    assert!(!failed.success())
+}
+
+#[test]
+fn actions_readonly_preview_does_not_mutate_storage() uses (evm: mut Evm) {
+    let c = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:48)
+    let _: (u256,u256,u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:ControlMsg::PreviewActions {
+            expected_version:1,count:3,o1:9,n1:250,o2:13,n2:250,o3:3,n3:100,
+        })
+    let s: (u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:ControlMsg::Snapshot {})
+    assert!(s.0 == 1 && s.1 == 400 && s.2 == 300 && s.3 == 100)
+}
+
+// --- v1.5 goal-attested execution tests ---
+#[test]
+fn goal_attested_one_step_transfer_and_dynamic_followup() uses (evm: mut Evm) {
+    let addr = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:400)
+    let v2: u256 = evm.call(addr:addr,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitGoalActions {
+            expected_version:1,count:1,o1:1,n1:150,o2:0,n2:0,o3:0,n3:0,
+            target_a:250,target_b:450,target_c:100,
+        })
+    assert!(v2 == 2)
+    let v3: u256 = evm.call(addr:addr,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitGoalActions {
+            expected_version:2,count:1,o1:1,n1:50,o2:0,n2:0,o3:0,n3:0,
+            target_a:200,target_b:500,target_c:100,
+        })
+    assert!(v3 == 3)
+    let s: (u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:addr,gas:1000000,value:Wei::zero(),message:ControlMsg::Snapshot {})
+    assert!(s.0 == 3 && s.1 == 200 && s.2 == 500 && s.3 == 100)
+}
+
+#[test]
+fn goal_mismatch_fails_atomically_even_with_valid_policy() uses (evm: mut Evm) {
+    let addr = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:401)
+    let r = evm.try_call(addr:addr,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitGoalActions {
+            expected_version:1,count:1,o1:1,n1:150,o2:0,n2:0,o3:0,n3:0,
+            target_a:250,target_b:450,target_c:101,
+        })
+    assert!(!r.success())
+    let s: (u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:addr,gas:1000000,value:Wei::zero(),message:ControlMsg::Snapshot {})
+    assert!(s.0 == 1 && s.1 == 400 && s.2 == 300 && s.3 == 100)
+}
+
+#[test]
+fn goal_attested_commit_keeps_final_policy_guard() uses (evm: mut Evm) {
+    let addr = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:402)
+    let r = evm.try_call(addr:addr,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitGoalActions {
+            expected_version:1,count:1,o1:1,n1:250,o2:0,n2:0,o3:0,n3:0,
+            target_a:150,target_b:550,target_c:100,
+        })
+    assert!(!r.success())
+    let s: (u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:addr,gas:1000000,value:Wei::zero(),message:ControlMsg::Snapshot {})
+    assert!(s.0 == 1 && s.1 == 400 && s.2 == 300 && s.3 == 100)
+}
+
+#[test]
+fn goal_attested_stale_version_rejects() uses (evm: mut Evm) {
+    let addr = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:403)
+    let _: u256 = evm.call(addr:addr,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitGoalActions {
+            expected_version:1,count:1,o1:1,n1:150,o2:0,n2:0,o3:0,n3:0,
+            target_a:250,target_b:450,target_c:100,
+        })
+    let failed = evm.try_call(addr:addr,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitGoalActions {
+            expected_version:1,count:1,o1:1,n1:150,o2:0,n2:0,o3:0,n3:0,
+            target_a:100,target_b:600,target_c:100,
+        })
+    assert!(!failed.success())
+    let s: (u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:addr,gas:1000000,value:Wei::zero(),message:ControlMsg::Snapshot {})
+    assert!(s.0 == 2 && s.1 == 250 && s.2 == 450 && s.3 == 100)
+}
+
+// --- v1.7: incident limits independently attested inside Fe. ---
+#[test]
+fn incident_core_exposure_and_reserve_checked_by_fe() uses (evm: mut Evm) {
+    let addr = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:501)
+    let p: (u256,u256,u256,bool,u256,u256,u256) = evm.call(
+        addr:addr,gas:1000000,value:Wei::zero(),message:ControlMsg::PreviewIncidentActions {
+            expected_version:1,count:1,o1:9,n1:200,o2:0,n2:0,o3:0,n3:0,
+            target_a:200,target_b:300,target_c:100,
+            incident_market:0,exposure_max:200,reserve_min:300,
+        })
+    assert!(p.0 == 0 && p.1 == 0 && p.2 == 0 && p.3)
+    assert!(p.4 == 200 && p.5 == 300 && p.6 == 100)
+    let version: u256 = evm.call(addr:addr,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitIncidentActions {
+            expected_version:1,count:1,o1:9,n1:200,o2:0,n2:0,o3:0,n3:0,
+            target_a:200,target_b:300,target_c:100,
+            incident_market:0,exposure_max:200,reserve_min:300,
+        })
+    assert!(version == 2)
+    let s: (u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:addr,gas:1000000,value:Wei::zero(),message:ControlMsg::Snapshot {})
+    assert!(s.0 == 2 && s.1 == 200 && s.2 == 300 && s.3 == 100)
+}
+
+#[test]
+fn incident_rejects_weak_exposure_even_when_ordinary_policy_passes() uses (evm: mut Evm) {
+    let addr = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:502)
+    // Normal Fe policy accepts 250/450/100; incident Core <= 200 does not.
+    let p: (u256,u256,u256,bool,u256,u256,u256) = evm.call(
+        addr:addr,gas:1000000,value:Wei::zero(),message:ControlMsg::PreviewIncidentActions {
+            expected_version:1,count:1,o1:1,n1:150,o2:0,n2:0,o3:0,n3:0,
+            target_a:250,target_b:450,target_c:100,
+            incident_market:0,exposure_max:200,reserve_min:200,
+        })
+    assert!(p.0 == 0 && p.1 == 0 && p.2 == 1 && p.3)
+    let rejected = evm.try_call(addr:addr,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitIncidentActions {
+            expected_version:1,count:1,o1:1,n1:150,o2:0,n2:0,o3:0,n3:0,
+            target_a:250,target_b:450,target_c:100,
+            incident_market:0,exposure_max:200,reserve_min:200,
+        })
+    assert!(!rejected.success())
+    let s: (u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:addr,gas:1000000,value:Wei::zero(),message:ControlMsg::Snapshot {})
+    assert!(s.0 == 1 && s.1 == 400 && s.2 == 300 && s.3 == 100)
+}
+
+#[test]
+fn incident_rejects_insufficient_reserve_even_when_goal_matches() uses (evm: mut Evm) {
+    let addr = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:503)
+    let p: (u256,u256,u256,bool,u256,u256,u256) = evm.call(
+        addr:addr,gas:1000000,value:Wei::zero(),message:ControlMsg::PreviewIncidentActions {
+            expected_version:1,count:1,o1:9,n1:200,o2:0,n2:0,o3:0,n3:0,
+            target_a:200,target_b:300,target_c:100,
+            incident_market:0,exposure_max:200,reserve_min:500,
+        })
+    assert!(p.0 == 0 && p.1 == 0 && p.2 == 2 && p.3)
+    let rejected = evm.try_call(addr:addr,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitIncidentActions {
+            expected_version:1,count:1,o1:9,n1:200,o2:0,n2:0,o3:0,n3:0,
+            target_a:200,target_b:300,target_c:100,
+            incident_market:0,exposure_max:200,reserve_min:500,
+        })
+    assert!(!rejected.success())
+    let s: (u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:addr,gas:1000000,value:Wei::zero(),message:ControlMsg::Snapshot {})
+    assert!(s.0 == 1 && s.1 == 400)
+}
+
+#[test]
+fn incident_goal_mismatch_reverts_even_if_constraints_pass() uses (evm: mut Evm) {
+    let addr = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:504)
+    let p: (u256,u256,u256,bool,u256,u256,u256) = evm.call(
+        addr:addr,gas:1000000,value:Wei::zero(),message:ControlMsg::PreviewIncidentActions {
+            expected_version:1,count:1,o1:9,n1:200,o2:0,n2:0,o3:0,n3:0,
+            target_a:200,target_b:301,target_c:100,
+            incident_market:0,exposure_max:200,reserve_min:200,
+        })
+    assert!(p.0 == 0 && p.1 == 0 && p.2 == 0 && !p.3)
+    let rejected = evm.try_call(addr:addr,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitIncidentActions {
+            expected_version:1,count:1,o1:9,n1:200,o2:0,n2:0,o3:0,n3:0,
+            target_a:200,target_b:301,target_c:100,
+            incident_market:0,exposure_max:200,reserve_min:200,
+        })
+    assert!(!rejected.success())
+    let s: (u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:addr,gas:1000000,value:Wei::zero(),message:ControlMsg::Snapshot {})
+    assert!(s.0 == 1 && s.1 == 400)
+}
+
+#[test]
+fn incident_invalid_specification_rejected_by_fe() uses (evm: mut Evm) {
+    let addr = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:505)
+    let bad_market: (u256,u256,u256,bool,u256,u256,u256) = evm.call(
+        addr:addr,gas:1000000,value:Wei::zero(),message:ControlMsg::PreviewIncidentActions {
+            expected_version:1,count:1,o1:9,n1:200,o2:0,n2:0,o3:0,n3:0,
+            target_a:200,target_b:300,target_c:100,
+            incident_market:3,exposure_max:200,reserve_min:200,
+        })
+    assert!(bad_market.2 == 4)
+    let bad_floor: (u256,u256,u256,bool,u256,u256,u256) = evm.call(
+        addr:addr,gas:1000000,value:Wei::zero(),message:ControlMsg::PreviewIncidentActions {
+            expected_version:1,count:1,o1:9,n1:200,o2:0,n2:0,o3:0,n3:0,
+            target_a:200,target_b:300,target_c:100,
+            incident_market:0,exposure_max:200,reserve_min:50,
+        })
+    assert!(bad_floor.2 == 4)
+    let rejected = evm.try_call(addr:addr,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitIncidentActions {
+            expected_version:1,count:1,o1:9,n1:200,o2:0,n2:0,o3:0,n3:0,
+            target_a:200,target_b:300,target_c:100,
+            incident_market:3,exposure_max:200,reserve_min:200,
+        })
+    assert!(!rejected.success())
+}
+
+#[test]
+fn incident_stale_version_and_order_precondition_cannot_commit() uses (evm: mut Evm) {
+    let addr = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:506)
+    let bad = evm.try_call(addr:addr,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitIncidentActions {
+            expected_version:1,count:1,o1:13,n1:250,o2:0,n2:0,o3:0,n3:0,
+            target_a:400,target_b:550,target_c:100,
+            incident_market:0,exposure_max:450,reserve_min:200,
+        })
+    assert!(!bad.success())
+    let version: u256 = evm.call(addr:addr,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitIncidentActions {
+            expected_version:1,count:1,o1:9,n1:200,o2:0,n2:0,o3:0,n3:0,
+            target_a:200,target_b:300,target_c:100,
+            incident_market:0,exposure_max:200,reserve_min:300,
+        })
+    assert!(version == 2)
+    let stale = evm.try_call(addr:addr,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitIncidentActions {
+            expected_version:1,count:1,o1:9,n1:200,o2:0,n2:0,o3:0,n3:0,
+            target_a:0,target_b:300,target_c:100,
+            incident_market:0,exposure_max:200,reserve_min:300,
+        })
+    assert!(!stale.success())
+    let s: (u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:addr,gas:1000000,value:Wei::zero(),message:ControlMsg::Snapshot {})
+    assert!(s.0 == 2 && s.1 == 200 && s.2 == 300 && s.3 == 100)
+}
+
+#[test]
+fn incident_unsafe_intermediate_safe_final_allowed() uses (evm: mut Evm) {
+    let addr = evm.create2<CovenantControl>(value:Wei::zero(),args:(),salt:507)
+    let p: (u256,u256,u256,bool,u256,u256,u256) = evm.call(
+        addr:addr,gas:1000000,value:Wei::zero(),message:ControlMsg::PreviewIncidentActions {
+            expected_version:1,count:3,o1:9,n1:250,o2:13,n2:250,o3:3,n3:100,
+            target_a:250,target_b:450,target_c:100,
+            incident_market:0,exposure_max:250,reserve_min:200,
+        })
+    assert!(p.0 == 0 && p.1 == 0 && p.2 == 0 && p.3)
+    let version: u256 = evm.call(addr:addr,gas:1000000,value:Wei::zero(),
+        message:ControlMsg::CommitIncidentActions {
+            expected_version:1,count:3,o1:9,n1:250,o2:13,n2:250,o3:3,n3:100,
+            target_a:250,target_b:450,target_c:100,
+            incident_market:0,exposure_max:250,reserve_min:200,
+        })
+    assert!(version == 2)
+}

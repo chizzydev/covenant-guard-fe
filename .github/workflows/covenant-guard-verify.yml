@@ -1,0 +1,98 @@
+name: Covenant Guard | Fe 26.5.0 security and reproducibility
+
+on:
+  push:
+    branches: [main, covenant-guard-dev, p08-verification]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu-p08-evidence:
+    name: Ubuntu 24.04 | Fe + Node + Python oracle + signed EVM + mutants
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      # Fingerprint observed on the owner's successful Ubuntu 24.04 R4 run,
+      # then independently checked against the installed VM compiler binary.
+      # Do not accept an unverified, silently substituted compiler.
+      P08_LINUX_FE_SHA256: "3732fbe8a6e9d2ea3925d02d0e3a1478bc1e01d742c2be75d3ea7300c46c45f0"
+    steps:
+      - name: Checkout the exact commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Node 24 with npm lockfile cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Preflight immutable release inventory
+        shell: bash
+        run: |
+          node p08/ci-source-inventory.mjs
+          node scripts/p06_verify.mjs
+          node scripts/p06_r4_verify.mjs
+          node p07/verify-source.mjs
+
+      - name: Install exact tagged Fe release and enforce approved binary hash
+        shell: bash
+        run: |
+          bash scripts/INSTALL_FE_UBUNTU.sh
+          test -x "$HOME/.fe/bin/fe"
+          echo "${P08_LINUX_FE_SHA256}  $HOME/.fe/bin/fe" | sha256sum -c -
+          "$HOME/.fe/bin/fe" --version | grep -F 'fe 26.5.0 (3dab95f)'
+          echo "$HOME/.fe/bin" >> "$GITHUB_PATH"
+
+      - name: Full P08-R4 independent Fe/EVM/Oracle/mutation verification
+        shell: bash
+        run: |
+          export P08_FE_EXE="$HOME/.fe/bin/fe"
+          bash RUN_P08_UBUNTU.sh
+
+      - name: Require all security and reproducibility gate markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOG="results/p08/P08_LINUX_RUN_LOG.txt"
+          test -s "$LOG"
+          for marker in \
+            'P08_LINUX_FE_BINARY_PIN=PASS' \
+            'P08_FE_98_TESTS=PASS' \
+            'P08_NODE_45_TESTS=PASS' \
+            'P08_EVM_DIFFERENTIAL=PASS' \
+            'P08_MUTANTS_EVM=PASS' \
+            'P08_JUDGE_WITNESS_4_ACCEPT_2_REJECT=PASS' \
+            'P08_REPRODUCIBILITY_PROVENANCE=PASS' \
+            'P08_LINUX_FULL_FE_EVM_ORACLE_AND_MUTANTS=PASS' \
+            'P08_LINUX_R4_GATE=PASS' \
+            'P08_LINUX_PIN_LOCK_COMPLETE=true'; do
+            grep -Fxq "$marker" "$LOG" || { echo "MISSING_REQUIRED_MARKER=$marker"; exit 1; }
+          done
+          test -s results/p07/P07_RUN_MANIFEST.json
+          test -s results/p08/JUDGE_WITNESS.json
+          test -s results/p08/P08_REPRODUCIBILITY_RECEIPT.json
+          echo "P08_PUBLIC_GITHUB_CI_GATE=PASS"
+
+      - name: Preserve independently generated proof receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: covenant-guard-p08-ubuntu-${{ github.run_id }}
+          path: |
+            results/P06_RUN_LOG.txt
+            results/p07/*.json
+            results/p08/*.json
+            results/p08/P08_LINUX_RUN_LOG.txt
+          if-no-files-found: warn
+          retention-days: 14

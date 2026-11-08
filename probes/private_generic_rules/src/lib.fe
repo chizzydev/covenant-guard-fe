@@ -1,0 +1,5 @@
+use covenant_transition::{Guard3,TripleLimits}
+
+fn illegal(g: Guard3) -> u256 {
+    g.rules.total
+}

@@ -1,0 +1,214 @@
+{
+  "exportedAt": "2026-11-07T15:46:38.917Z",
+  "audit": {
+    "sessionId": "08a99b93-b0ad-47f5-a7be-34e7f33a17f9",
+    "verifiedAtStartup": true,
+    "lastDigest": "11dc3b5034c94d36ef8f7e76fcf206566cbab6e5e6fa1e8ebac40d87b3fec1e6",
+    "entries": 2,
+    "journal": "local hash-linked JSONL, not an on-chain or tamper-proof attestation"
+  },
+  "journalEntries": [
+    {
+      "index": 1,
+      "previousDigest": "0000000000000000000000000000000000000000000000000000000000000000",
+      "timestamp": "2026-11-07T15:36:14.913Z",
+      "sessionId": "08a99b93-b0ad-47f5-a7be-34e7f33a17f9",
+      "event": {
+        "kind": "session",
+        "label": "local EVM started; in-memory contract state reset"
+      },
+      "digest": "85f9b039de79489cdaa3da7fc51829111830d4eadcde1149fb907adf1ed6d727"
+    },
+    {
+      "index": 2,
+      "previousDigest": "85f9b039de79489cdaa3da7fc51829111830d4eadcde1149fb907adf1ed6d727",
+      "timestamp": "2026-11-07T15:45:15.419Z",
+      "sessionId": "08a99b93-b0ad-47f5-a7be-34e7f33a17f9",
+      "event": {
+        "kind": "transaction",
+        "operation": "incident",
+        "outcome": "committed",
+        "role": "admin",
+        "sender": "0x19e7e376e7c213b7e7e7e46cc70a5dd086daff2a",
+        "txHash": "0x8cd7a15163ec7751c7acf5c3b9fb978ce93483414b2ef9fb5ff575d34f12eaa9",
+        "nonce": "87",
+        "incident": {
+          "market": "0",
+          "maximum": "200",
+          "reserve": "200"
+        },
+        "strategy": "reserve",
+        "objective": "Reduce Core by at least 200 units and maintain at least 200 units unallocated. / Build protective reserve",
+        "target": {
+          "a": "200",
+          "b": "300",
+          "c": "100"
+        },
+        "planFingerprint": "11e2f0bcee71f38ef1da79e90fa043606a29608b3be7ca654a77b15e71e6848b",
+        "incidentFingerprint": "6c51dc3bade6985a566d7e6ead7638e19259f5c7f1e7910a06122a129e379142",
+        "proposal": {
+          "expectedVersion": "1",
+          "steps": [
+            {
+              "opcode": "9",
+              "amount": "200"
+            }
+          ]
+        },
+        "fePreviewFinal": {
+          "a": "200",
+          "b": "300",
+          "c": "100"
+        },
+        "stageMasks": [
+          0
+        ],
+        "operationError": 0,
+        "policyMask": 0,
+        "feIncidentMask": 0,
+        "feIncidentGoalMatches": true,
+        "feIncidentPreviewSource": "Fe previewIncidentActions() EVM static call",
+        "incidentEnforcement": "Fe commitIncidentActions()",
+        "authorized": true,
+        "before": {
+          "version": "1",
+          "a": "400",
+          "b": "300",
+          "c": "100"
+        },
+        "after": {
+          "version": "2",
+          "a": "200",
+          "b": "300",
+          "c": "100"
+        },
+        "gasSpent": "52442",
+        "evmException": null,
+        "rejectionCategory": null,
+        "incidentMetrics": {
+          "allocated": "600",
+          "reserve": "400",
+          "retired": "200",
+          "incidentExposure": "200",
+          "roomBeforeLimit": "0",
+          "changes": [
+            {
+              "market": "Core",
+              "from": "400",
+              "to": "200",
+              "delta": "-200"
+            },
+            {
+              "market": "Supporting",
+              "from": "300",
+              "to": "300",
+              "delta": "0"
+            },
+            {
+              "market": "Satellite",
+              "from": "100",
+              "to": "100",
+              "delta": "0"
+            }
+          ]
+        }
+      },
+      "digest": "11dc3b5034c94d36ef8f7e76fcf206566cbab6e5e6fa1e8ebac40d87b3fec1e6"
+    }
+  ],
+  "transactions": [
+    {
+      "kind": "transaction",
+      "operation": "incident",
+      "outcome": "committed",
+      "role": "admin",
+      "sender": "0x19e7e376e7c213b7e7e7e46cc70a5dd086daff2a",
+      "txHash": "0x8cd7a15163ec7751c7acf5c3b9fb978ce93483414b2ef9fb5ff575d34f12eaa9",
+      "nonce": "87",
+      "incident": {
+        "market": "0",
+        "maximum": "200",
+        "reserve": "200"
+      },
+      "strategy": "reserve",
+      "objective": "Reduce Core by at least 200 units and maintain at least 200 units unallocated. / Build protective reserve",
+      "target": {
+        "a": "200",
+        "b": "300",
+        "c": "100"
+      },
+      "planFingerprint": "11e2f0bcee71f38ef1da79e90fa043606a29608b3be7ca654a77b15e71e6848b",
+      "incidentFingerprint": "6c51dc3bade6985a566d7e6ead7638e19259f5c7f1e7910a06122a129e379142",
+      "proposal": {
+        "expectedVersion": "1",
+        "steps": [
+          {
+            "opcode": "9",
+            "amount": "200"
+          }
+        ]
+      },
+      "fePreviewFinal": {
+        "a": "200",
+        "b": "300",
+        "c": "100"
+      },
+      "stageMasks": [
+        0
+      ],
+      "operationError": 0,
+      "policyMask": 0,
+      "feIncidentMask": 0,
+      "feIncidentGoalMatches": true,
+      "feIncidentPreviewSource": "Fe previewIncidentActions() EVM static call",
+      "incidentEnforcement": "Fe commitIncidentActions()",
+      "authorized": true,
+      "before": {
+        "version": "1",
+        "a": "400",
+        "b": "300",
+        "c": "100"
+      },
+      "after": {
+        "version": "2",
+        "a": "200",
+        "b": "300",
+        "c": "100"
+      },
+      "gasSpent": "52442",
+      "evmException": null,
+      "rejectionCategory": null,
+      "incidentMetrics": {
+        "allocated": "600",
+        "reserve": "400",
+        "retired": "200",
+        "incidentExposure": "200",
+        "roomBeforeLimit": "0",
+        "changes": [
+          {
+            "market": "Core",
+            "from": "400",
+            "to": "200",
+            "delta": "-200"
+          },
+          {
+            "market": "Supporting",
+            "from": "300",
+            "to": "300",
+            "delta": "0"
+          },
+          {
+            "market": "Satellite",
+            "from": "100",
+            "to": "100",
+            "delta": "0"
+          }
+        ]
+      },
+      "time": "2026-11-07T15:45:15.419Z",
+      "index": 2,
+      "sessionId": "08a99b93-b0ad-47f5-a7be-34e7f33a17f9",
+      "digest": "11dc3b5034c94d36ef8f7e76fcf206566cbab6e5e6fa1e8ebac40d87b3fec1e6"
+    }
+  ]
+}

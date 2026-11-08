@@ -1,0 +1,994 @@
+// P04-R1: strict progressive and atomic recovery under a shared Fe guard.
+// This reference adapter is intentionally local and synthetic. The Fe kernel
+// owns permanent rules, revision, stored incident, and all postconditions.
+// The adapter must authenticate guardian/operator and prevent wrapper swaps.
+use std::abi::sol
+use std::evm::{Address, Ctx, Evm, Call}
+use covenant_transition::Guarded
+
+msg KernelMsg {
+    #[selector = sol("snapshot()")]
+    Snapshot -> (u256,u256,u256,u256,u256,u256,u256,u256,u256),
+    #[selector = sol("operator()")]
+    Operator -> Address,
+    #[selector = sol("guardian()")]
+    Guardian -> Address,
+    #[selector = sol("incidentSnapshot()")]
+    IncidentSnapshot -> (u256,u256,u256,u256,u256),
+    #[selector = sol("incidentDeficits()")]
+    IncidentDeficits -> (u256,u256),
+    #[selector = sol("preview(uint256,uint256,uint256,uint256)")]
+    Preview { expected_version:u256,a:u256,b:u256,c:u256 } -> (u256,u256,u256,u256),
+    #[selector = sol("commit(uint256,uint256,uint256,uint256)")]
+    Commit { expected_version:u256,a:u256,b:u256,c:u256 } -> u256,
+    #[selector = sol("previewActions(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    PreviewActions { expected_version:u256,count:u256,
+                     o1:u256,n1:u256,o2:u256,n2:u256,o3:u256,n3:u256,
+    } -> (u256,u256,u256,u256,u256,u256,u256,u256,u256),
+    #[selector = sol("commitActions(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    CommitActions { expected_version:u256,count:u256,
+                    o1:u256,n1:u256,o2:u256,n2:u256,o3:u256,n3:u256,
+    } -> u256,
+    #[selector = sol("commitGoalActions(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    CommitGoalActions { expected_version:u256,count:u256,
+                        o1:u256,n1:u256,o2:u256,n2:u256,o3:u256,n3:u256,
+                        target_a:u256,target_b:u256,target_c:u256,
+    } -> u256,
+    // 14 uint256 arguments: expected, market, maximum, reserve, count,
+    // three (opcode,amount) pairs, exact target (a,b,c).
+    #[selector = sol("activateContain(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    ActivateContain { expected_version:u256, incident_market:u256,
+                      exposure_max:u256, reserve_min:u256, count:u256,
+                      o1:u256,n1:u256,o2:u256,n2:u256,o3:u256,n3:u256,
+                      target_a:u256,target_b:u256,target_c:u256,
+    } -> u256,
+    #[selector = sol("activateProgressive(uint256,uint256,uint256,uint256)")]
+    ActivateProgressive {expected_version:u256,incident_market:u256,
+                         exposure_max:u256,reserve_min:u256} -> u256,
+    #[selector = sol("releaseIncident(uint256)")]
+    ReleaseIncident {expected_version:u256} -> u256,
+    #[selector = sol("releaseIncidentBound(uint256,uint256)")]
+    ReleaseIncidentBound {expected_version:u256,incident_id:u256} -> u256,
+    #[selector = sol("previewIncidentActions(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    PreviewIncidentActions { expected_version:u256,count:u256,
+                             o1:u256,n1:u256,o2:u256,n2:u256,o3:u256,n3:u256,
+                             target_a:u256,target_b:u256,target_c:u256,
+                             incident_market:u256,exposure_max:u256,reserve_min:u256,
+    } -> (u256,u256,u256,bool,u256,u256,u256),
+    #[selector = sol("commitIncidentActions(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    CommitIncidentActions { expected_version:u256,count:u256,
+                            o1:u256,n1:u256,o2:u256,n2:u256,o3:u256,n3:u256,
+                            target_a:u256,target_b:u256,target_c:u256,
+                            incident_market:u256,exposure_max:u256,reserve_min:u256,
+    } -> u256,
+    #[selector = sol("commitMigration(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    CommitMigration { expected_version:u256,count:u256,
+                      m1:u256,v1:u256,m2:u256,v2:u256,m3:u256,v3:u256,
+    } -> u256,
+}
+
+pub contract AllocationKernel uses (ctx: Ctx) {
+    mut operator: Address,
+    mut guardian: Address,
+    mut guard: Guarded,
+
+    init(guardian_address:Address) uses (mut operator, mut guardian, mut guard, ctx) {
+        assert!(guardian_address != ctx.caller())
+        assert!(guardian_address != Address::zero())
+        operator = ctx.caller()
+        guardian = guardian_address
+        guard = Guarded::new(a:400,b:300,c:100,budget:1000,reserve_floor:100,
+                             cap_a:550,cap_b:500,cap_c:350)
+    }
+
+    recv KernelMsg {
+        Snapshot -> (u256,u256,u256,u256,u256,u256,u256,u256,u256) uses (guard) {
+            guard.snapshot()
+        }
+        Operator -> Address uses (operator) { operator }
+        Guardian -> Address uses (guardian) { guardian }
+        IncidentSnapshot -> (u256,u256,u256,u256,u256) uses (guard) {
+            guard.incident_snapshot()
+        }
+        IncidentDeficits -> (u256,u256) uses (guard) {
+            guard.deficit_snapshot()
+        }
+        Preview {expected_version,a,b,c} -> (u256,u256,u256,u256) uses (guard) {
+            guard.preview_direct(expected_version,a,b,c)
+        }
+        Commit {expected_version,a,b,c} -> u256 uses (operator,mut guard,ctx) {
+            assert!(ctx.caller() == operator)
+            guard.commit_direct(expected_version,a,b,c)
+        }
+        PreviewActions {expected_version,count,o1,n1,o2,n2,o3,n3} -> (u256,u256,u256,u256,u256,u256,u256,u256,u256) uses (guard) {
+            guard.preview_actions(expected_version,count,o1,n1,o2,n2,o3,n3)
+        }
+        CommitActions {expected_version,count,o1,n1,o2,n2,o3,n3} -> u256
+            uses (operator,mut guard,ctx) {
+            assert!(ctx.caller() == operator)
+            guard.commit_actions(expected_version,count,o1,n1,o2,n2,o3,n3)
+        }
+        CommitGoalActions {expected_version,count,o1,n1,o2,n2,o3,n3,
+                           target_a,target_b,target_c} -> u256 uses (operator,mut guard,ctx) {
+            assert!(ctx.caller() == operator)
+            guard.commit_goal(expected_version,count,o1,n1,o2,n2,o3,n3,
+                              target_a,target_b,target_c)
+        }
+        CommitMigration {expected_version,count,m1,v1,m2,v2,m3,v3} -> u256
+            uses (operator,mut guard,ctx) {
+            assert!(ctx.caller() == operator)
+            guard.commit_migration(expected_version,count,m1,v1,m2,v2,m3,v3)
+        }
+        ActivateContain {expected_version,incident_market,exposure_max,reserve_min,
+                         count,o1,n1,o2,n2,o3,n3,target_a,target_b,target_c}
+            -> u256 uses (guardian,mut guard,ctx) {
+            assert!(ctx.caller() == guardian)
+            guard.activate_and_contain(expected_version,incident_market,exposure_max,
+                reserve_min,count,o1,n1,o2,n2,o3,n3,target_a,target_b,target_c)
+        }
+        ActivateProgressive {expected_version,incident_market,exposure_max,reserve_min}
+            -> u256 uses (guardian,mut guard,ctx) {
+            assert!(ctx.caller() == guardian)
+            guard.activate_progressive(expected_version,incident_market,
+                                       exposure_max,reserve_min)
+        }
+        ReleaseIncident {expected_version} -> u256 uses (guardian,mut guard,ctx) {
+            assert!(ctx.caller() == guardian)
+            guard.release(expected_version)
+        }
+        ReleaseIncidentBound {expected_version,incident_id} -> u256
+            uses (guardian,mut guard,ctx) {
+            assert!(ctx.caller() == guardian)
+            guard.release_bound(expected_version,incident_id)
+        }
+        PreviewIncidentActions {expected_version,count,o1,n1,o2,n2,o3,n3,
+                                target_a,target_b,target_c,incident_market,
+                                exposure_max,reserve_min}
+            -> (u256,u256,u256,bool,u256,u256,u256) uses (guard) {
+            guard.preview_incident(expected_version,count,o1,n1,o2,n2,o3,n3,
+                target_a,target_b,target_c,incident_market,exposure_max,reserve_min)
+        }
+        CommitIncidentActions {expected_version,count,o1,n1,o2,n2,o3,n3,
+                               target_a,target_b,target_c,incident_market,
+                               exposure_max,reserve_min}
+            -> u256 uses (operator,mut guard,ctx) {
+            assert!(ctx.caller() == operator)
+            guard.commit_incident(expected_version,count,o1,n1,o2,n2,o3,n3,
+                target_a,target_b,target_c,incident_market,exposure_max,reserve_min)
+        }
+    }
+}
+
+msg RogueMsg {
+    #[selector = sol("attempt(address,uint256,uint256,uint256,uint256)")]
+    Attempt { target:Address,version:u256,a:u256,b:u256,c:u256 } -> bool,
+}
+
+pub contract RogueOperator uses (call:mut Call) {
+    recv RogueMsg {
+        Attempt {target,version,a,b,c} -> bool uses (mut call) {
+            let r = call.try_call(addr:target,gas:600000,value:Wei::zero(),
+                message:KernelMsg::Commit {expected_version:version,a,b,c})
+            r.success()
+        }
+    }
+}
+
+
+// Test-only forwarder. It has NO authentication of its own and is unsuitable
+// as a real guardian; it models an external guardian CALLER address for tests.
+msg GuardianTestMsg {
+    #[selector = sol("guardianActivate(address,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    Activate { target:Address,expected:u256,market:u256,maximum:u256,reserve:u256,
+               opcode:u256,amount:u256,a:u256,b:u256,c:u256 } -> bool,
+    #[selector = sol("guardianProgressive(address,uint256,uint256,uint256,uint256)")]
+    Progressive {target:Address,expected:u256,market:u256,maximum:u256,
+                 reserve:u256} -> bool,
+    #[selector = sol("guardianRelease(address,uint256)")]
+    Release {target:Address,expected:u256} -> bool,
+    #[selector = sol("guardianReleaseBound(address,uint256,uint256)")]
+    ReleaseBound {target:Address,expected:u256,id:u256} -> bool,
+    #[selector = sol("guardianTryCommit(address,uint256,uint256,uint256,uint256)")]
+    TryCommit {target:Address,expected:u256,a:u256,b:u256,c:u256} -> bool,
+}
+
+pub contract GuardianTestActor uses (call:mut Call) {
+    recv GuardianTestMsg {
+        Activate {target,expected,market,maximum,reserve,opcode,amount,a,b,c}
+            -> bool uses (mut call) {
+            let r = call.try_call(addr:target,gas:1800000,value:Wei::zero(),
+                message:KernelMsg::ActivateContain {
+                    expected_version:expected,incident_market:market,
+                    exposure_max:maximum,reserve_min:reserve,count:1,
+                    o1:opcode,n1:amount,o2:0,n2:0,o3:0,n3:0,
+                    target_a:a,target_b:b,target_c:c,
+                })
+            r.success()
+        }
+        Progressive {target,expected,market,maximum,reserve} -> bool uses (mut call) {
+            let r = call.try_call(addr:target,gas:1000000,value:Wei::zero(),
+                message:KernelMsg::ActivateProgressive {
+                    expected_version:expected,incident_market:market,
+                    exposure_max:maximum,reserve_min:reserve,
+                })
+            r.success()
+        }
+        Release {target,expected} -> bool uses (mut call) {
+            let r = call.try_call(addr:target,gas:1000000,value:Wei::zero(),
+                message:KernelMsg::ReleaseIncident {expected_version:expected})
+            r.success()
+        }
+        ReleaseBound {target,expected,id} -> bool uses (mut call) {
+            let r = call.try_call(addr:target,gas:1000000,value:Wei::zero(),
+                message:KernelMsg::ReleaseIncidentBound {
+                    expected_version:expected,incident_id:id,
+                })
+            r.success()
+        }
+        TryCommit {target,expected,a,b,c} -> bool uses (mut call) {
+            let r = call.try_call(addr:target,gas:1000000,value:Wei::zero(),
+                message:KernelMsg::Commit {expected_version:expected,a,b,c})
+            r.success()
+        }
+    }
+}
+
+#[test]
+fn p02_preview_and_direct_commit_agree() uses (evm:mut Evm) {
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(Address::new(99999),),salt:201)
+    let p:(u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::Preview {expected_version:1,a:350,b:350,c:100})
+    assert!(p.0 == 0 && p.1 == 2 && p.2 == 800 && p.3 == 200)
+    let v:u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::Commit {expected_version:1,a:350,b:350,c:100})
+    assert!(v == 2)
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) =
+        evm.call(addr:c,gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    assert!(s.0 == 2 && s.1 == 350 && s.2 == 350 && s.3 == 100
+            && s.4 == 1000 && s.5 == 100 && s.6 == 550
+            && s.7 == 500 && s.8 == 350)
+}
+
+#[test]
+fn p02_direct_bad_policy_reverts_entire_snapshot() uses (evm:mut Evm) {
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(Address::new(99999),),salt:202)
+    let first:(u256,u256,u256,u256,u256,u256,u256,u256,u256) =
+        evm.call(addr:c,gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    let invalid = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::Commit {expected_version:1,a:550,b:200,c:100})
+    assert!(!invalid.success())
+    let last:(u256,u256,u256,u256,u256,u256,u256,u256,u256) =
+        evm.call(addr:c,gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    // Compare every exposed state field; tuple Eq is unavailable for this arity in Fe 26.5.0.
+    assert!(first.0 == last.0 && first.1 == last.1 && first.2 == last.2
+            && first.3 == last.3 && first.4 == last.4 && first.5 == last.5
+            && first.6 == last.6 && first.7 == last.7 && first.8 == last.8)
+}
+
+#[test]
+fn p02_direct_overlarge_input_rejects_without_overflow() uses (evm:mut Evm) {
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(Address::new(99999),),salt:203)
+    let p:(u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::Preview {expected_version:1,a:u256::max(),b:0,c:0})
+    assert!(p.0 == 32)
+    let failed = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::Commit {expected_version:1,a:u256::max(),b:0,c:0})
+    assert!(!failed.success())
+}
+
+#[test]
+fn p02_stale_direct_rejects_without_mutation() uses (evm:mut Evm) {
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(Address::new(99999),),salt:204)
+    let _:u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::Commit {expected_version:1,a:350,b:350,c:100})
+    let stale = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::Commit {expected_version:1,a:300,b:350,c:100})
+    assert!(!stale.success())
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) =
+        evm.call(addr:c,gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    assert!(s.0 == 2 && s.1 == 350 && s.2 == 350 && s.3 == 100
+            && s.4 == 1000 && s.5 == 100 && s.6 == 550
+            && s.7 == 500 && s.8 == 350)
+}
+
+#[test]
+fn p02_bad_migration_final_reverts() uses (evm:mut Evm) {
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(Address::new(99999),),salt:205)
+    let failed = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::CommitMigration {expected_version:1,count:2,
+            m1:0,v1:550,m2:1,v2:200,m3:2,v3:0})
+    assert!(!failed.success())
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) =
+        evm.call(addr:c,gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    assert!(s.0 == 1 && s.1 == 400 && s.2 == 300 && s.3 == 100)
+}
+
+#[test]
+fn p02_migration_with_unsafe_intermediate_commits_safe_end() uses (evm:mut Evm) {
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(Address::new(99999),),salt:206)
+    // Step 1: Core 550 -> reserve violation. Step 2: Supporting 200 ->
+    // paired exposure violation. Step 3: Core 350 -> healthy final state.
+    let v:u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::CommitMigration {expected_version:1,count:3,
+            m1:0,v1:550,m2:1,v2:200,m3:0,v3:350})
+    assert!(v == 2)
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) =
+        evm.call(addr:c,gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    assert!(s.0 == 2 && s.1 == 350 && s.2 == 200 && s.3 == 100)
+}
+
+#[test]
+fn p02_action_preview_commit_consistent() uses (evm:mut Evm) {
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(Address::new(99999),),salt:207)
+    let p:(u256,u256,u256,u256,u256,u256,u256,u256,u256) =
+        evm.call(addr:c,gas:1000000,value:Wei::zero(),
+          message:KernelMsg::PreviewActions {expected_version:1,count:2,
+               o1:9,n1:200,o2:13,n2:100,o3:0,n3:0})
+    assert!(p.0 == 0 && p.1 == 0 && p.2 == 200 && p.3 == 400 && p.4 == 100)
+    let v:u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::CommitActions {expected_version:1,count:2,
+            o1:9,n1:200,o2:13,n2:100,o3:0,n3:0})
+    assert!(v == 2)
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) =
+        evm.call(addr:c,gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    assert!(s.0 == 2 && s.1 == 200 && s.2 == 400 && s.3 == 100)
+}
+
+#[test]
+fn p02_action_expect_is_step_bound() uses (evm:mut Evm) {
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(Address::new(99999),),salt:208)
+    // Expect Core 200 before retiring 200 -> failure at step 1.
+    let p:(u256,u256,u256,u256,u256,u256,u256,u256,u256) =
+        evm.call(addr:c,gas:1000000,value:Wei::zero(),
+          message:KernelMsg::PreviewActions {expected_version:1,count:2,
+               o1:15,n1:200,o2:9,n2:200,o3:0,n3:0})
+    assert!(p.0 == 64 && p.1 == 6)
+    let bad = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::CommitActions {expected_version:1,count:2,
+            o1:15,n1:200,o2:9,n2:200,o3:0,n3:0})
+    assert!(!bad.success())
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) =
+        evm.call(addr:c,gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    assert!(s.0 == 1 && s.1 == 400)
+}
+
+#[test]
+fn p02_issue_must_have_immediate_free_capacity() uses (evm:mut Evm) {
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(Address::new(99999),),salt:209)
+    // 800 used at start. 250 ISSUE supporting would exceed 1000,
+    // even when the next step RETIREs it again.
+    let bad = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::CommitActions {expected_version:1,count:2,
+            o1:13,n1:250,o2:10,n2:250,o3:0,n3:0})
+    assert!(!bad.success())
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) =
+        evm.call(addr:c,gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    assert!(s.0 == 1 && s.1 == 400 && s.2 == 300)
+}
+
+#[test]
+fn p02_goal_exact_target_verified_in_fe() uses (evm:mut Evm) {
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(Address::new(99999),),salt:210)
+    let wrong = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::CommitGoalActions {expected_version:1,count:1,
+            o1:9,n1:200,o2:0,n2:0,o3:0,n3:0,
+            target_a:250,target_b:300,target_c:100})
+    assert!(!wrong.success())
+    let v:u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::CommitGoalActions {expected_version:1,count:1,
+            o1:9,n1:200,o2:0,n2:0,o3:0,n3:0,
+            target_a:200,target_b:300,target_c:100})
+    assert!(v == 2)
+}
+
+#[test]
+fn p02_rogue_caller_is_denied() uses (evm:mut Evm) {
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(Address::new(99999),),salt:211)
+    let rogue = evm.create2<RogueOperator>(value:Wei::zero(),args:(),salt:212)
+    let allowed:bool = evm.call(addr:rogue,gas:1000000,value:Wei::zero(),
+        message:RogueMsg::Attempt {target:c,version:1,a:350,b:350,c:100})
+    assert!(!allowed)
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) =
+        evm.call(addr:c,gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    assert!(s.0 == 1 && s.1 == 400)
+}
+
+#[test]
+fn p02_read_only_previews_do_not_increment() uses (evm:mut Evm) {
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(Address::new(99999),),salt:213)
+    let _:(u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::Preview {expected_version:1,a:350,b:350,c:100})
+    let _:(u256,u256,u256,u256,u256,u256,u256,u256,u256) =
+        evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::PreviewActions {expected_version:1,count:1,
+           o1:9,n1:200,o2:0,n2:0,o3:0,n3:0})
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) =
+        evm.call(addr:c,gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    assert!(s.0 == 1 && s.1 == 400 && s.2 == 300 && s.3 == 100)
+}
+
+// Early-return test is intentionally a separate fixture; it is not an
+// additional mutating selector in the AllocationKernel's production ABI.
+msg EarlyMsg {
+    #[selector = sol("early(uint256,uint256,uint256)")]
+    Early {a:u256,b:u256,c:u256},
+    #[selector = sol("snapshot()")]
+    Snapshot -> (u256,u256,u256,u256,u256,u256,u256,u256,u256),
+}
+
+fn early_bad(_ g: mut Guarded, _ a:u256, _ b:u256, _ c:u256) {
+    let d = mut g.checked_edit(1)
+    d.a = a
+    d.b = b
+    d.c = c
+    return
+}
+
+pub contract EarlyReturnFixture {
+    mut guard:Guarded,
+    init() uses (mut guard) {
+        guard = Guarded::new(a:400,b:300,c:100,budget:1000,reserve_floor:100,
+                             cap_a:550,cap_b:500,cap_c:350)
+    }
+    recv EarlyMsg {
+        Early {a,b,c} uses (mut guard) { early_bad(mut guard,a,b,c) }
+        Snapshot -> (u256,u256,u256,u256,u256,u256,u256,u256,u256) uses (guard) {
+            guard.snapshot()
+        }
+    }
+}
+
+#[test]
+fn p02_early_return_cannot_evade_postcondition() uses (evm:mut Evm) {
+    let c = evm.create2<EarlyReturnFixture>(value:Wei::zero(),args:(),salt:214)
+    let bad = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:EarlyMsg::Early {a:550,b:200,c:100})
+    assert!(!bad.success())
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) =
+        evm.call(addr:c,gas:1000000,value:Wei::zero(),message:EarlyMsg::Snapshot {})
+    assert!(s.0 == 1 && s.1 == 400 && s.2 == 300)
+}
+
+
+// ---- P03: real EVM tests of persistent incident and separate authority. ----
+// In the harness the open GuardianTestActor is test-only, not authentication.
+#[test]
+fn p03_distinct_actors_and_inactive_snapshot() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:501)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:502)
+    let guardian:Address = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::Guardian {})
+    let operator:Address = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::Operator {})
+    assert!(guardian == g && guardian != operator)
+    let i:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentSnapshot {})
+    assert!(i.0 == 0 && i.1 == 0 && i.2 == 0 && i.3 == 0 && i.4 == 0)
+}
+
+#[test]
+fn p03_guardian_atomic_containment_and_exact_revision() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:503)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:504)
+    let accepted:bool = evm.call(addr:g,gas:3000000,value:Wei::zero(),
+        message:GuardianTestMsg::Activate {target:c,expected:1,market:0,
+            maximum:200,reserve:300,opcode:9,amount:200,a:200,b:300,c:100})
+    assert!(accepted)
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    let i:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentSnapshot {})
+    assert!(s.0 == 2 && s.1 == 200 && s.2 == 300 && s.3 == 100
+            && s.4 == 1000 && s.5 == 100 && s.6 == 550 && s.7 == 500 && s.8 == 350)
+    assert!(i.0 == 2 && i.1 == 1 && i.2 == 0 && i.3 == 200 && i.4 == 300)
+}
+
+#[test]
+fn p03_failed_atomic_activation_rolls_back_all_fields() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:505)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:506)
+    // Core 300 is above requested maximum 200 despite permanent policy.
+    let bad:bool = evm.call(addr:g,gas:3000000,value:Wei::zero(),
+        message:GuardianTestMsg::Activate {target:c,expected:1,market:0,
+            maximum:200,reserve:300,opcode:9,amount:100,a:300,b:300,c:100})
+    assert!(!bad)
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    let i:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentSnapshot {})
+    assert!(s.0 == 1 && s.1 == 400 && s.2 == 300 && s.3 == 100
+            && s.4 == 1000 && s.5 == 100 && s.6 == 550 && s.7 == 500 && s.8 == 350)
+    assert!(i.0 == 0 && i.1 == 0 && i.2 == 0 && i.3 == 0 && i.4 == 0)
+}
+
+#[test]
+fn p03_operator_cannot_activate_or_release() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:507)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:508)
+    let bad = evm.try_call(addr:c,gas:1500000,value:Wei::zero(),
+        message:KernelMsg::ActivateContain {expected_version:1,incident_market:0,
+            exposure_max:200,reserve_min:300,count:1,o1:9,n1:200,o2:0,n2:0,
+            o3:0,n3:0,target_a:200,target_b:300,target_c:100})
+    assert!(!bad.success())
+    let accepted:bool = evm.call(addr:g,gas:3000000,value:Wei::zero(),
+        message:GuardianTestMsg::Activate {target:c,expected:1,market:0,
+            maximum:200,reserve:300,opcode:9,amount:200,a:200,b:300,c:100})
+    assert!(accepted)
+    let bad_release = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::ReleaseIncident {expected_version:2})
+    assert!(!bad_release.success())
+    let i:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentSnapshot {})
+    assert!(i.0 == 2 && i.1 == 1 && i.3 == 200 && i.4 == 300)
+}
+
+#[test]
+fn p03_guardian_cannot_use_operator_setter() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:509)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:510)
+    let bad:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::TryCommit {target:c,expected:1,a:350,b:350,c:100})
+    assert!(!bad)
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    assert!(s.0 == 1 && s.1 == 400 && s.2 == 300 && s.3 == 100)
+}
+
+#[test]
+fn p03_all_ordinary_setter_routes_cannot_evade_incident() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:511)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:512)
+    let accepted:bool = evm.call(addr:g,gas:3000000,value:Wei::zero(),
+        message:GuardianTestMsg::Activate {target:c,expected:1,market:0,
+            maximum:200,reserve:300,opcode:9,amount:200,a:200,b:300,c:100})
+    assert!(accepted)
+    // These are all permanently valid 250/300/100 results, but Core > 200.
+    let d = evm.try_call(addr:c,gas:1500000,value:Wei::zero(),
+        message:KernelMsg::Commit {expected_version:2,a:250,b:300,c:100})
+    assert!(!d.success())
+    let m = evm.try_call(addr:c,gas:1500000,value:Wei::zero(),
+        message:KernelMsg::CommitMigration {expected_version:2,count:1,
+            m1:0,v1:250,m2:0,v2:0,m3:0,v3:0})
+    assert!(!m.success())
+    let a = evm.try_call(addr:c,gas:1500000,value:Wei::zero(),
+        message:KernelMsg::CommitActions {expected_version:2,count:1,
+            o1:12,n1:50,o2:0,n2:0,o3:0,n3:0})
+    assert!(!a.success())
+    let q = evm.try_call(addr:c,gas:1500000,value:Wei::zero(),
+        message:KernelMsg::CommitGoalActions {expected_version:2,count:1,
+            o1:12,n1:50,o2:0,n2:0,o3:0,n3:0,
+            target_a:250,target_b:300,target_c:100})
+    assert!(!q.success())
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    let i:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentSnapshot {})
+    assert!(s.0 == 2 && s.1 == 200 && s.2 == 300 && s.3 == 100
+            && s.4 == 1000 && s.5 == 100 && s.6 == 550 && s.7 == 500 && s.8 == 350)
+    assert!(i.0 == 2 && i.1 == 1 && i.2 == 0 && i.3 == 200 && i.4 == 300)
+}
+
+#[test]
+fn p03_incident_commit_cannot_weaken_declared_limits() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:513)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:514)
+    let accepted:bool = evm.call(addr:g,gas:3000000,value:Wei::zero(),
+        message:GuardianTestMsg::Activate {target:c,expected:1,market:0,
+            maximum:200,reserve:300,opcode:9,amount:200,a:200,b:300,c:100})
+    assert!(accepted)
+    let bad = evm.try_call(addr:c,gas:1600000,value:Wei::zero(),
+        message:KernelMsg::CommitIncidentActions {expected_version:2,count:1,
+            o1:13,n1:50,o2:0,n2:0,o3:0,n3:0,
+            target_a:200,target_b:350,target_c:100,
+            incident_market:0,exposure_max:250,reserve_min:100})
+    assert!(!bad.success())
+    let v:u256 = evm.call(addr:c,gas:1600000,value:Wei::zero(),
+        message:KernelMsg::CommitIncidentActions {expected_version:2,count:1,
+            o1:13,n1:50,o2:0,n2:0,o3:0,n3:0,
+            target_a:200,target_b:350,target_c:100,
+            incident_market:0,exposure_max:200,reserve_min:300})
+    assert!(v == 3)
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    assert!(s.0 == 3 && s.1 == 200 && s.2 == 350 && s.3 == 100)
+}
+
+#[test]
+fn p03_incident_readonly_previews_match_stored_objective() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:515)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:516)
+    let accepted:bool = evm.call(addr:g,gas:3000000,value:Wei::zero(),
+        message:GuardianTestMsg::Activate {target:c,expected:1,market:0,
+            maximum:200,reserve:300,opcode:9,amount:200,a:200,b:300,c:100})
+    assert!(accepted)
+    let p:(u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::Preview {expected_version:2,a:250,b:300,c:100})
+    assert!(p.0 == 128)
+    let actions:(u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::PreviewActions {expected_version:2,count:1,
+            o1:12,n1:50,o2:0,n2:0,o3:0,n3:0})
+    assert!(actions.0 == 128 && actions.2 == 250)
+    let inc:(u256,u256,u256,bool,u256,u256,u256) = evm.call(addr:c,
+        gas:1000000,value:Wei::zero(),
+        message:KernelMsg::PreviewIncidentActions {expected_version:2,count:1,
+            o1:12,n1:50,o2:0,n2:0,o3:0,n3:0,
+            target_a:250,target_b:300,target_c:100,
+            incident_market:0,exposure_max:200,reserve_min:300})
+    assert!(inc.0 == 128 && inc.1 == 0 && inc.2 == 1 && inc.3)
+    let wrong:(u256,u256,u256,bool,u256,u256,u256) = evm.call(addr:c,
+        gas:1000000,value:Wei::zero(),
+        message:KernelMsg::PreviewIncidentActions {expected_version:2,count:1,
+            o1:12,n1:50,o2:0,n2:0,o3:0,n3:0,
+            target_a:250,target_b:300,target_c:100,
+            incident_market:0,exposure_max:250,reserve_min:100})
+    assert!(wrong.2 == 4)
+    let i:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentSnapshot {})
+    assert!(i.0 == 2 && i.1 == 1)
+}
+
+#[test]
+fn p03_guardian_release_invalidates_old_versions_and_preserves_history() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:517)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:518)
+    let accepted:bool = evm.call(addr:g,gas:3000000,value:Wei::zero(),
+        message:GuardianTestMsg::Activate {target:c,expected:1,market:0,
+            maximum:200,reserve:300,opcode:9,amount:200,a:200,b:300,c:100})
+    assert!(accepted)
+    let released:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::Release {target:c,expected:2})
+    assert!(released)
+    let i:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentSnapshot {})
+    assert!(i.0 == 0 && i.1 == 1 && i.2 == 0 && i.3 == 200 && i.4 == 300)
+    let stale = evm.try_call(addr:c,gas:1200000,value:Wei::zero(),
+        message:KernelMsg::Commit {expected_version:2,a:250,b:300,c:100})
+    assert!(!stale.success())
+    let v:u256 = evm.call(addr:c,gas:1200000,value:Wei::zero(),
+        message:KernelMsg::Commit {expected_version:3,a:250,b:300,c:100})
+    assert!(v == 4)
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    assert!(s.0 == 4 && s.1 == 250 && s.2 == 300 && s.3 == 100)
+}
+
+#[test]
+fn p03_stale_or_duplicate_guardian_activation_denied() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:519)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:520)
+    let stale:bool = evm.call(addr:g,gas:3000000,value:Wei::zero(),
+        message:GuardianTestMsg::Activate {target:c,expected:0,market:0,
+            maximum:200,reserve:300,opcode:9,amount:200,a:200,b:300,c:100})
+    assert!(!stale)
+    let accepted:bool = evm.call(addr:g,gas:3000000,value:Wei::zero(),
+        message:GuardianTestMsg::Activate {target:c,expected:1,market:0,
+            maximum:200,reserve:300,opcode:9,amount:200,a:200,b:300,c:100})
+    assert!(accepted)
+    let duplicate:bool = evm.call(addr:g,gas:3000000,value:Wei::zero(),
+        message:GuardianTestMsg::Activate {target:c,expected:2,market:0,
+            maximum:200,reserve:300,opcode:15,amount:200,a:200,b:300,c:100})
+    assert!(!duplicate)
+    let i:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentSnapshot {})
+    assert!(i.0 == 2 && i.1 == 1 && i.3 == 200)
+}
+
+#[test]
+fn p03_reactivation_increments_incident_id() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:521)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:522)
+    let first:bool = evm.call(addr:g,gas:3000000,value:Wei::zero(),
+        message:GuardianTestMsg::Activate {target:c,expected:1,market:0,
+            maximum:200,reserve:300,opcode:9,amount:200,a:200,b:300,c:100})
+    assert!(first)
+    let released:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::Release {target:c,expected:2})
+    assert!(released)
+    let second:bool = evm.call(addr:g,gas:3000000,value:Wei::zero(),
+        message:GuardianTestMsg::Activate {target:c,expected:3,market:0,
+            maximum:200,reserve:300,opcode:15,amount:200,a:200,b:300,c:100})
+    assert!(second)
+    let i:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentSnapshot {})
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(
+        addr:c,gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    assert!(i.0 == 2 && i.1 == 2 && i.2 == 0 && i.3 == 200 && i.4 == 300)
+    assert!(s.0 == 4 && s.1 == 200 && s.2 == 300 && s.3 == 100)
+}
+
+
+// ----- P04 direct-EVM lifecycle and adversarial regression tests -----
+#[test]
+fn p04_progressive_activation_stores_uncontained_objective() uses (evm:mut Evm) {
+    let guardian = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:601)
+    let target = evm.create2<AllocationKernel>(value:Wei::zero(),args:(guardian,),salt:602)
+    let ok:bool = evm.call(addr:guardian,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::Progressive {target,expected:1,market:0,maximum:200,reserve:300})
+    assert!(ok)
+    let i:(u256,u256,u256,u256,u256) = evm.call(addr:target,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentSnapshot {})
+    let d:(u256,u256) = evm.call(addr:target,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentDeficits {})
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(addr:target,
+        gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    assert!(i.0 == 1 && i.1 == 1 && i.2 == 0 && i.3 == 200 && i.4 == 300)
+    assert!(d.0 == 200 && d.1 == 100)
+    assert!(s.0 == 2 && s.1 == 400 && s.2 == 300 && s.3 == 100)
+}
+
+#[test]
+fn p04_progressive_two_step_recovery_reaches_contained() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:603)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:604)
+    let activated:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::Progressive {target:c,expected:1,market:0,maximum:200,reserve:300})
+    assert!(activated)
+    let first:u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::Commit {expected_version:2,a:300,b:300,c:100})
+    assert!(first == 3)
+    let d:(u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::IncidentDeficits {})
+    let i:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentSnapshot {})
+    assert!(d.0 == 100 && d.1 == 0 && i.0 == 1 && i.1 == 1)
+    let second:u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::CommitActions {expected_version:3,count:1,
+            o1:9,n1:100,o2:0,n2:0,o3:0,n3:0})
+    assert!(second == 4)
+    let final:(u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(addr:c,
+        gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    let finished:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentSnapshot {})
+    let deficits:(u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentDeficits {})
+    assert!(final.0 == 4 && final.1 == 200 && final.2 == 300 && final.3 == 100)
+    assert!(finished.0 == 2 && finished.1 == 1 && deficits.0 == 0 && deficits.1 == 0)
+}
+
+#[test]
+fn p04_authorized_worsening_reverts_full_state() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:605)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:606)
+    let activated:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::Progressive {target:c,expected:1,market:0,maximum:200,reserve:300})
+    assert!(activated)
+    let _:u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::Commit {expected_version:2,a:300,b:300,c:100})
+    let invalid = evm.try_call(addr:c,gas:1200000,value:Wei::zero(),
+        message:KernelMsg::Commit {expected_version:3,a:350,b:300,c:100})
+    assert!(!invalid.success())
+    let state:(u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(addr:c,
+        gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    let i:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentSnapshot {})
+    assert!(state.0 == 3 && state.1 == 300 && state.2 == 300 && state.3 == 100
+            && state.4 == 1000 && state.5 == 100 && state.6 == 550
+            && state.7 == 500 && state.8 == 350)
+    assert!(i.0 == 1 && i.1 == 1 && i.2 == 0 && i.3 == 200 && i.4 == 300)
+}
+
+#[test]
+fn p04_tradeoff_cannot_worsen_reserve_while_improving_exposure() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:607)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:608)
+    let yes:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::Progressive {target:c,expected:1,market:0,maximum:200,reserve:300})
+    assert!(yes)
+    // Core 400 -> 300 improves exposure deficit by 100, but Supporting
+    // 300 -> 450 consumes too much reserve: 300/450/100 leaves 150 free,
+    // so the reserve deficit worsens from 100 to 150 while exposure improves
+    // while reserve deficit becomes 150 instead of 100. Permanent policy
+    // permits 850 deployed and paired exposure 300<=2*450.
+    let bad = evm.try_call(addr:c,gas:1300000,value:Wei::zero(),
+        message:KernelMsg::Commit {expected_version:2,a:300,b:450,c:100})
+    assert!(!bad.success())
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(addr:c,
+        gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    assert!(s.0 == 2 && s.1 == 400 && s.2 == 300 && s.3 == 100)
+}
+
+#[test]
+fn p04_noop_and_expect_only_cannot_fake_progress() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:609)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:610)
+    let yes:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::Progressive {target:c,expected:1,market:0,maximum:200,reserve:300})
+    assert!(yes)
+    let no_op = evm.try_call(addr:c,gas:1300000,value:Wei::zero(),
+        message:KernelMsg::Commit {expected_version:2,a:400,b:300,c:100})
+    assert!(!no_op.success())
+    let expect = evm.try_call(addr:c,gas:1300000,value:Wei::zero(),
+        message:KernelMsg::CommitActions {expected_version:2,count:1,
+            o1:15,n1:400,o2:0,n2:0,o3:0,n3:0})
+    assert!(!expect.success())
+    let p:(u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::Preview {expected_version:2,a:400,b:300,c:100})
+    assert!(p.0 == 128)
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(addr:c,
+        gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    assert!(s.0 == 2 && s.1 == 400)
+}
+
+#[test]
+fn p04_all_legacy_mutators_block_recovering_nonprogress() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:611)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:612)
+    let yes:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::Progressive {target:c,expected:1,market:0,maximum:200,reserve:300})
+    assert!(yes)
+    let bad_migration = evm.try_call(addr:c,gas:1500000,value:Wei::zero(),
+        message:KernelMsg::CommitMigration {expected_version:2,count:1,
+            m1:1,v1:350,m2:0,v2:0,m3:0,v3:0})
+    assert!(!bad_migration.success())
+    let bad_actions = evm.try_call(addr:c,gas:1500000,value:Wei::zero(),
+        message:KernelMsg::CommitActions {expected_version:2,count:1,
+            o1:13,n1:50,o2:0,n2:0,o3:0,n3:0})
+    assert!(!bad_actions.success())
+    let bad_goal = evm.try_call(addr:c,gas:1500000,value:Wei::zero(),
+        message:KernelMsg::CommitGoalActions {expected_version:2,count:1,
+            o1:13,n1:50,o2:0,n2:0,o3:0,n3:0,
+            target_a:400,target_b:350,target_c:100})
+    assert!(!bad_goal.success())
+    let bad_incident = evm.try_call(addr:c,gas:1500000,value:Wei::zero(),
+        message:KernelMsg::CommitIncidentActions {expected_version:2,count:1,
+            o1:13,n1:50,o2:0,n2:0,o3:0,n3:0,
+            target_a:400,target_b:350,target_c:100,
+            incident_market:0,exposure_max:200,reserve_min:300})
+    assert!(!bad_incident.success())
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(addr:c,
+        gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    let i:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentSnapshot {})
+    assert!(s.0 == 2 && s.1 == 400 && s.2 == 300 && s.3 == 100)
+    assert!(i.0 == 1 && i.1 == 1 && i.3 == 200 && i.4 == 300)
+}
+
+#[test]
+fn p04_preview_progressive_acceptance_and_partial_incident_mask() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:613)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:614)
+    let yes:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::Progressive {target:c,expected:1,market:0,maximum:200,reserve:300})
+    assert!(yes)
+    let p:(u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::Preview {expected_version:2,a:300,b:300,c:100})
+    assert!(p.0 == 0)
+    let step:(u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(addr:c,
+        gas:1000000,value:Wei::zero(),message:KernelMsg::PreviewActions {
+            expected_version:2,count:1,o1:9,n1:100,o2:0,n2:0,o3:0,n3:0})
+    assert!(step.0 == 0 && step.2 == 300 && step.3 == 300 && step.4 == 100)
+    let inc:(u256,u256,u256,bool,u256,u256,u256) = evm.call(addr:c,
+        gas:1000000,value:Wei::zero(),message:KernelMsg::PreviewIncidentActions {
+            expected_version:2,count:1,o1:9,n1:100,o2:0,n2:0,o3:0,n3:0,
+            target_a:300,target_b:300,target_c:100,
+            incident_market:0,exposure_max:200,reserve_min:300})
+    // The next state still exceeds Core max; that does NOT make monotone
+    // partial recovery invalid. Diagnostic incident mask reports remaining
+    // exposure shortfall; the transition flag is zero and exact target true.
+    assert!(inc.0 == 0 && inc.1 == 0 && inc.2 == 1 && inc.3)
+    let snap:(u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(addr:c,
+        gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    assert!(snap.0 == 2 && snap.1 == 400)
+}
+
+#[test]
+fn p04_guardian_cannot_release_uncontained_incident() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:615)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:616)
+    let yes:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::Progressive {target:c,expected:1,market:0,maximum:200,reserve:300})
+    assert!(yes)
+    let release:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::ReleaseBound {target:c,expected:2,id:1})
+    assert!(!release)
+    let i:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentSnapshot {})
+    assert!(i.0 == 1 && i.1 == 1)
+}
+
+#[test]
+fn p04_contained_cannot_regress_and_valid_adjustment_succeeds() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:617)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:618)
+    let yes:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::Progressive {target:c,expected:1,market:0,maximum:200,reserve:300})
+    assert!(yes)
+    let _:u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::Commit {expected_version:2,a:200,b:300,c:100})
+    let regression = evm.try_call(addr:c,gas:1200000,value:Wei::zero(),
+        message:KernelMsg::Commit {expected_version:3,a:250,b:350,c:100})
+    assert!(!regression.success())
+    let ok:u256 = evm.call(addr:c,gas:1200000,value:Wei::zero(),
+        message:KernelMsg::Commit {expected_version:3,a:200,b:350,c:100})
+    assert!(ok == 4)
+    let i:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentSnapshot {})
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(addr:c,
+        gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    assert!(i.0 == 2 && s.0 == 4 && s.1 == 200 && s.2 == 350 && s.3 == 100)
+}
+
+#[test]
+fn p04_guardian_bound_release_and_stale_prevented() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:619)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:620)
+    let yes:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::Progressive {target:c,expected:1,market:0,maximum:200,reserve:300})
+    assert!(yes)
+    let _:u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::Commit {expected_version:2,a:200,b:300,c:100})
+    let wrong_id:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::ReleaseBound {target:c,expected:3,id:2})
+    assert!(!wrong_id)
+    let stale:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::ReleaseBound {target:c,expected:2,id:1})
+    assert!(!stale)
+    let good:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::ReleaseBound {target:c,expected:3,id:1})
+    assert!(good)
+    let i:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentSnapshot {})
+    let s:(u256,u256,u256,u256,u256,u256,u256,u256,u256) = evm.call(addr:c,
+        gas:1000000,value:Wei::zero(),message:KernelMsg::Snapshot {})
+    assert!(i.0 == 0 && i.1 == 1 && s.0 == 4 && s.1 == 200)
+}
+
+#[test]
+fn p04_unauthorized_and_stale_activation_denied() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:621)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:622)
+    let unauthorized = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:KernelMsg::ActivateProgressive {expected_version:1,
+            incident_market:0,exposure_max:200,reserve_min:300})
+    assert!(!unauthorized.success())
+    let stale:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::Progressive {target:c,expected:0,market:0,maximum:200,reserve:300})
+    assert!(!stale)
+    let bad_spec:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::Progressive {target:c,expected:1,market:4,maximum:200,reserve:300})
+    assert!(!bad_spec)
+    let valid:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::Progressive {target:c,expected:1,market:0,maximum:200,reserve:300})
+    assert!(valid)
+    let duplicate:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::Progressive {target:c,expected:2,market:0,maximum:200,reserve:300})
+    assert!(!duplicate)
+    let i:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentSnapshot {})
+    assert!(i.0 == 1 && i.1 == 1)
+}
+
+#[test]
+fn p04_progressive_activation_when_safe_starts_contained() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:623)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:624)
+    // Baseline Core 400 and reserve 200 already meet loose bounds.
+    let yes:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::Progressive {target:c,expected:1,market:0,maximum:450,reserve:200})
+    assert!(yes)
+    let i:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentSnapshot {})
+    assert!(i.0 == 2 && i.1 == 1 && i.3 == 450 && i.4 == 200)
+}
+
+#[test]
+fn p04_recovering_specialized_commit_can_make_partial_progress() uses (evm:mut Evm) {
+    let g = evm.create2<GuardianTestActor>(value:Wei::zero(),args:(),salt:625)
+    let c = evm.create2<AllocationKernel>(value:Wei::zero(),args:(g,),salt:626)
+    let yes:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GuardianTestMsg::Progressive {target:c,expected:1,market:0,maximum:200,reserve:300})
+    assert!(yes)
+    let step:u256 = evm.call(addr:c,gas:1500000,value:Wei::zero(),
+        message:KernelMsg::CommitIncidentActions {expected_version:2,count:1,
+            o1:9,n1:100,o2:0,n2:0,o3:0,n3:0,
+            target_a:300,target_b:300,target_c:100,
+            incident_market:0,exposure_max:200,reserve_min:300})
+    assert!(step == 3)
+    let i:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentSnapshot {})
+    assert!(i.0 == 1 && i.1 == 1)
+    let d:(u256,u256) = evm.call(addr:c,gas:1000000,
+        value:Wei::zero(),message:KernelMsg::IncidentDeficits {})
+    assert!(d.0 == 100 && d.1 == 0)
+}

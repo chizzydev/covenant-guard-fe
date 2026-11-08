@@ -1,0 +1,249 @@
+// P05 independent governance registry: quorum, membership, minimum delay.
+// Imports the SAME Guard3 type from the SAME physical covenant_transition ingot.
+// No allocation policy or original Guarded object is copied into this ingot.
+use std::abi::sol
+use std::evm::{Address, Ctx, Evm, Call}
+use covenant_transition::{Guard3,TripleLimits}
+
+msg GovernanceMsg {
+    #[selector = sol("snapshot()")]
+    Snapshot -> (u256,u256,u256,u256),
+    #[selector = sol("incidentSnapshot()")]
+    IncidentSnapshot -> (u256,u256,u256,u256,u256),
+    #[selector = sol("deficits()")]
+    Deficits -> (u256,u256),
+    #[selector = sol("preview(uint256,uint256,uint256,uint256)")]
+    Preview {expected:u256,quorum:u256,members:u256,delay:u256} -> (u256,u256,u256,u256),
+    #[selector = sol("setConfiguration(uint256,uint256,uint256,uint256)")]
+    SetConfiguration {expected:u256,quorum:u256,members:u256,delay:u256,
+    } -> u256,
+    #[selector = sol("changeQuorumAndMembers(uint256,uint256,uint256)")]
+    ChangeQuorumAndMembers {expected:u256,members:u256,quorum:u256} -> u256,
+    #[selector = sol("activateRestriction(uint256,uint256,uint256)")]
+    ActivateRestriction {expected:u256,max_quorum:u256,min_delay:u256} -> u256,
+    #[selector = sol("activateAtomicRestriction(uint256,uint256,uint256,uint256,uint256,uint256)")]
+    ActivateAtomicRestriction {expected:u256,max_quorum:u256,min_delay:u256,
+                               quorum:u256,members:u256,delay:u256,
+    } -> u256,
+    #[selector = sol("releaseRestriction(uint256,uint256)")]
+    ReleaseRestriction {expected:u256,incident_id:u256} -> u256,
+    #[selector = sol("guardian()")]
+    Guardian -> Address,
+    #[selector = sol("operator()")]
+    Operator -> Address,
+}
+
+pub contract GovernanceRegistry uses (ctx:Ctx) {
+    mut operator:Address,
+    mut guardian:Address,
+    mut engine:Guard3,
+
+    init(guardian_address:Address) uses (ctx,mut operator,mut guardian,mut engine) {
+        assert!(guardian_address != ctx.caller())
+        assert!(guardian_address != Address::zero())
+        operator = ctx.caller()
+        guardian = guardian_address
+        // Distinct domain predicate: 1<=quorum<=members<=20 and delay>=2.
+        // Emergency buffer is MINIMUM DELAY (z), not unused allocation budget.
+        let rules = TripleLimits {total:1000,reserve_floor:0,
+            min_x:1,min_y:1,min_z:2,cap_x:20,cap_y:20,cap_z:365,
+            ratio_x_y:1,buffer_mode:1}
+        engine = Guard3::new(x:5,y:9,z:2,config:rules)
+    }
+
+    recv GovernanceMsg {
+        Snapshot -> (u256,u256,u256,u256) uses (engine) { engine.snapshot() }
+        IncidentSnapshot -> (u256,u256,u256,u256,u256) uses (engine) {
+            engine.incident_snapshot()
+        }
+        Deficits -> (u256,u256) uses (engine) { engine.deficits() }
+        Preview {expected,quorum,members,delay} -> (u256,u256,u256,u256) uses (engine) {
+            engine.preview(expected,quorum,members,delay)
+        }
+        SetConfiguration {expected,quorum,members,delay} -> u256
+            uses (operator,mut engine,ctx) {
+            assert!(ctx.caller() == operator)
+            engine.commit(expected,quorum,members,delay)
+        }
+        ChangeQuorumAndMembers {expected,members,quorum} -> u256
+            uses (operator,mut engine,ctx) {
+            assert!(ctx.caller() == operator)
+            // First lower membership; temporarily invalid quorum is allowed,
+            // only the final full state can commit.
+            engine.migrate(expected,1,members,0,quorum)
+        }
+        ActivateRestriction {expected,max_quorum,min_delay} -> u256
+            uses (guardian,mut engine,ctx) {
+            assert!(ctx.caller() == guardian)
+            engine.activate_progressive(expected,0,max_quorum,min_delay)
+        }
+        ActivateAtomicRestriction {expected,max_quorum,min_delay,quorum,members,delay} -> u256
+            uses (guardian,mut engine,ctx) {
+            assert!(ctx.caller() == guardian)
+            engine.activate_contain(expected,0,max_quorum,min_delay,
+                                    quorum,members,delay)
+        }
+        ReleaseRestriction {expected,incident_id} -> u256
+            uses (guardian,mut engine,ctx) {
+            assert!(ctx.caller() == guardian)
+            engine.release_bound(expected,incident_id)
+        }
+        Guardian -> Address uses (guardian) {guardian}
+        Operator -> Address uses (operator) {operator}
+    }
+}
+
+// TEST-ONLY unauthenticated forwarder is deployed as guardian in EVM tests.
+msg GovernanceGuardianMsg {
+    #[selector = sol("start(address,uint256,uint256,uint256)")]
+    Start {target:Address,version:u256,maximum:u256,min_delay:u256} -> bool,
+    #[selector = sol("startAtomic(address,uint256,uint256,uint256,uint256,uint256,uint256)")]
+    StartAtomic {target:Address,version:u256,maximum:u256,min_delay:u256,
+                 quorum:u256,members:u256,delay:u256,
+    } -> bool,
+    #[selector = sol("release(address,uint256,uint256)")]
+    Release {target:Address,version:u256,id:u256} -> bool,
+    #[selector = sol("rogueWrite(address,uint256,uint256,uint256,uint256)")]
+    RogueWrite {target:Address,version:u256,quorum:u256,members:u256,delay:u256,
+    } -> bool,
+}
+
+pub contract GovernanceGuardianFixture uses (call:mut Call) {
+    recv GovernanceGuardianMsg {
+        Start {target,version,maximum,min_delay} -> bool uses (mut call) {
+            let r = call.try_call(addr:target,gas:1500000,value:Wei::zero(),
+                message:GovernanceMsg::ActivateRestriction {expected:version,
+                    max_quorum:maximum,min_delay})
+            r.success()
+        }
+        StartAtomic {target,version,maximum,min_delay,quorum,members,delay}
+            -> bool uses (mut call) {
+            let r = call.try_call(addr:target,gas:1500000,value:Wei::zero(),
+                message:GovernanceMsg::ActivateAtomicRestriction {expected:version,
+                    max_quorum:maximum,min_delay,quorum,members,delay})
+            r.success()
+        }
+        Release {target,version,id} -> bool uses (mut call) {
+            let r = call.try_call(addr:target,gas:1500000,value:Wei::zero(),
+                message:GovernanceMsg::ReleaseRestriction {expected:version,incident_id:id})
+            r.success()
+        }
+        RogueWrite {target,version,quorum,members,delay} -> bool uses (mut call) {
+            let r = call.try_call(addr:target,gas:1500000,value:Wei::zero(),
+                message:GovernanceMsg::SetConfiguration {expected:version,
+                    quorum,members,delay})
+            r.success()
+        }
+    }
+}
+
+#[test]
+fn p05_governance_permanent_quorum_and_delay_on_evm() uses (evm:mut Evm) {
+    let g = evm.create2<GovernanceGuardianFixture>(value:Wei::zero(),args:(),salt:7001)
+    let c = evm.create2<GovernanceRegistry>(value:Wei::zero(),args:(g,),salt:7002)
+    let p:(u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:GovernanceMsg::Preview {expected:1,quorum:10,members:9,delay:2})
+    assert!(p.0 == 8)
+    let bad = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:GovernanceMsg::SetConfiguration {expected:1,quorum:10,members:9,delay:2})
+    assert!(!bad.success())
+    let no_delay = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:GovernanceMsg::SetConfiguration {expected:1,quorum:5,members:9,delay:1})
+    assert!(!no_delay.success())
+    let snap:(u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:GovernanceMsg::Snapshot {})
+    assert!(snap.0 == 1 && snap.1 == 5 && snap.2 == 9 && snap.3 == 2)
+}
+
+#[test]
+fn p05_governance_migration_final_state_and_revision() uses (evm:mut Evm) {
+    let g = evm.create2<GovernanceGuardianFixture>(value:Wei::zero(),args:(),salt:7003)
+    let c = evm.create2<GovernanceRegistry>(value:Wei::zero(),args:(g,),salt:7004)
+    let v:u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:GovernanceMsg::ChangeQuorumAndMembers {expected:1,members:4,quorum:3})
+    assert!(v == 2)
+    let snap:(u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:GovernanceMsg::Snapshot {})
+    assert!(snap.0 == 2 && snap.1 == 3 && snap.2 == 4 && snap.3 == 2)
+    let stale = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:GovernanceMsg::SetConfiguration {expected:1,quorum:2,members:4,delay:2})
+    assert!(!stale.success())
+}
+
+#[test]
+fn p05_governance_progressive_restriction_two_deficits() uses (evm:mut Evm) {
+    let g = evm.create2<GovernanceGuardianFixture>(value:Wei::zero(),args:(),salt:7005)
+    let c = evm.create2<GovernanceRegistry>(value:Wei::zero(),args:(g,),salt:7006)
+    let ok:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GovernanceGuardianMsg::Start {target:c,version:1,maximum:2,min_delay:7})
+    assert!(ok)
+    let first:(u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:GovernanceMsg::Deficits {})
+    assert!(first.0 == 3 && first.1 == 5)
+    let v:u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:GovernanceMsg::SetConfiguration {expected:2,quorum:4,members:9,delay:4})
+    assert!(v == 3)
+    let d:(u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:GovernanceMsg::Deficits {})
+    assert!(d.0 == 2 && d.1 == 3)
+    let rollback = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:GovernanceMsg::SetConfiguration {expected:3,quorum:3,members:9,delay:3})
+    assert!(!rollback.success())
+    let no_progress = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:GovernanceMsg::SetConfiguration {expected:3,quorum:4,members:9,delay:4})
+    assert!(!no_progress.success())
+    let alternate = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:GovernanceMsg::ChangeQuorumAndMembers {expected:3,members:9,quorum:4})
+    assert!(!alternate.success())
+    let finish:u256 = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:GovernanceMsg::SetConfiguration {expected:3,quorum:2,members:9,delay:7})
+    assert!(finish == 4)
+    let inc:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:GovernanceMsg::IncidentSnapshot {})
+    assert!(inc.0 == 2 && inc.1 == 1 && inc.3 == 2 && inc.4 == 7)
+    let regress = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:GovernanceMsg::SetConfiguration {expected:4,quorum:3,members:9,delay:7})
+    assert!(!regress.success())
+    let alternate_regression = evm.try_call(addr:c,gas:1000000,value:Wei::zero(),
+        message:GovernanceMsg::ChangeQuorumAndMembers {expected:4,members:9,quorum:3})
+    assert!(!alternate_regression.success())
+    let denied:bool = evm.call(addr:g,gas:1000000,value:Wei::zero(),
+        message:GovernanceGuardianMsg::RogueWrite {target:c,version:4,
+            quorum:2,members:9,delay:8})
+    assert!(!denied)
+    let released:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GovernanceGuardianMsg::Release {target:c,version:4,id:1})
+    assert!(released)
+    let after:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:GovernanceMsg::IncidentSnapshot {})
+    assert!(after.0 == 0 && after.1 == 1)
+}
+
+#[test]
+fn p05_governance_guardian_only_bound_release_and_atomic() uses (evm:mut Evm) {
+    let g = evm.create2<GovernanceGuardianFixture>(value:Wei::zero(),args:(),salt:7007)
+    let c = evm.create2<GovernanceRegistry>(value:Wei::zero(),args:(g,),salt:7008)
+    let unauthorized = evm.try_call(addr:c,gas:1500000,value:Wei::zero(),
+        message:GovernanceMsg::ActivateRestriction {expected:1,max_quorum:2,min_delay:7})
+    assert!(!unauthorized.success())
+    let failed:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GovernanceGuardianMsg::StartAtomic {target:c,version:1,maximum:2,
+            min_delay:7,quorum:4,members:9,delay:7})
+    assert!(!failed)
+    let initial:(u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:GovernanceMsg::Snapshot {})
+    assert!(initial.0 == 1 && initial.1 == 5)
+    let good:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GovernanceGuardianMsg::StartAtomic {target:c,version:1,maximum:2,
+            min_delay:7,quorum:2,members:9,delay:7})
+    assert!(good)
+    let inc:(u256,u256,u256,u256,u256) = evm.call(addr:c,gas:1000000,value:Wei::zero(),
+        message:GovernanceMsg::IncidentSnapshot {})
+    assert!(inc.0 == 2 && inc.1 == 1)
+    let wrong:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GovernanceGuardianMsg::Release {target:c,version:2,id:2})
+    assert!(!wrong)
+    let good_release:bool = evm.call(addr:g,gas:2000000,value:Wei::zero(),
+        message:GovernanceGuardianMsg::Release {target:c,version:2,id:1})
+    assert!(good_release)
+}

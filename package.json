@@ -1,0 +1,30 @@
+{
+  "name": "covenant-control-fe",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Covenant Guard P06-R4: flagship single-state HTTP and guard workspace cutover",
+  "scripts": {
+    "start": "node app/server.mjs",
+    "smoke": "node --test app/tests/audit.test.mjs app/tests/planner.test.mjs app/tests/incident.test.mjs app/tests/runtime.test.mjs app/tests/http.test.mjs",
+    "guard:unit": "node --test app/tests/guard-runtime.test.mjs",
+    "guard:http": "node --test app/tests/guard-http.test.mjs",
+    "guard:smoke": "node --test app/tests/guard-runtime.test.mjs app/tests/guard-http.test.mjs",
+    "check:js": "node --check app/chain.mjs && node --check app/server.mjs && node --check app/guard-chain.mjs && node --check app/guard-api.mjs && node --check app/public/client.js && node --check app/public/guard.js && node --check app/tests/guard-runtime.test.mjs && node --check app/tests/guard-http.test.mjs && node --check app/flagship-candidate.mjs && node --check app/tests/flagship-candidate.test.mjs && node --check app/flagship-runtime.mjs && node --check app/tests/flagship-cutover.test.mjs",
+    "verify:static": "node scripts/p06_verify.mjs",
+    "proof:legacy": "node scripts/demo.mjs",
+    "flagship:candidate": "node --test app/tests/flagship-candidate.test.mjs",
+    "flagship:cutover": "node --test app/tests/flagship-cutover.test.mjs",
+    "verify:cutover": "node scripts/p06_r4_verify.mjs"
+  },
+  "engines": {
+    "node": ">=20.12.0"
+  },
+  "dependencies": {
+    "@ethereumjs/common": "10.1.3",
+    "@ethereumjs/tx": "10.1.3",
+    "@ethereumjs/util": "10.1.3",
+    "@ethereumjs/vm": "10.1.3",
+    "ethers": "6.16.0"
+  }
+}

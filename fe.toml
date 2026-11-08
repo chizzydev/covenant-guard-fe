@@ -1,0 +1,6 @@
+[ingot]
+name = "covenant_guard"
+version = "0.1.0"
+
+[dependencies]
+covenant_transition = { path = "library/covenant_transition" }
