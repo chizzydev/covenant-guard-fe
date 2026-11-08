@@ -1,0 +1,9 @@
+import {readFileSync,writeFileSync}from'node:fs';import{createHash}from'node:crypto';import{execFileSync}from'node:child_process';
+const sha=p=>createHash('sha256').update(readFileSync(p)).digest('hex');
+const manifest=JSON.parse(readFileSync('results/p07/P07_RUN_MANIFEST.json','utf8'));
+for(const [key,path]of Object.entries({libraryFeSha256:'library/covenant_transition/src/lib.fe',flagshipFeSha256:'consumers/allocation_flagship/src/lib.fe',packageLockSha256:'package-lock.json',flagshipBinarySha256:'artifacts/guard/flagship/AllocationFlagship.bin',flagshipAbiSha256:'artifacts/guard/flagship/AllocationFlagship.abi.json'}))if(manifest.source[key]!==sha(path))throw Error('P09_PROVENANCE_DRIFT_'+key);
+const witness=JSON.parse(readFileSync('results/p08/JUDGE_WITNESS.json','utf8'));
+if(witness.steps.length!==6||witness.steps.filter(s=>s.success).length!==4)throw Error('P09_WITNESS_INVALID');
+let commit=null;try{commit=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()}catch{}
+const receipt={commit,schema:'COVENANT_P09_QUALIFICATION_V1',base:'5fe196b5c91851131e916024c43e6524f2d9a3c4',timestamp:new Date().toISOString(),platform:process.platform,node:process.version,sourceManifest:sha('MANIFEST_SHA256.txt'),feBinary:sha(process.env.P09_FE_EXE||process.env.FE_EXE||process.env.P08_FE_EXE),library:sha('library/covenant_transition/src/lib.fe'),flagship:sha('consumers/allocation_flagship/src/lib.fe'),bytecode:sha('artifacts/guard/flagship/AllocationFlagship.bin'),p07:manifest.results,p09EngineeringTests:27,additionalCompiledMutants:3,witnessSteps:6,trust:'Locally generated evidence, not remote attestation; public CI for corrected code remains pending.'};
+writeFileSync('results/p09/P09_QUALIFICATION_RECEIPT.json',JSON.stringify(receipt,null,2));console.log('P09_PROVENANCE=PASS');

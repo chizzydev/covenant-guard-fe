@@ -636,13 +636,31 @@ struct TripleIncident {
 }
 impl Copy for TripleIncident {}
 
+// Feasibility is exact for TripleLimits: every permanent constraint is an
+// upper bound on a nonnegative coordinate/sum, except the x/y ratio.
+// The coordinate-wise least permanent state (raising y for that ratio and z
+// for a delay buffer) is therefore a witness whenever any witness exists.
+// Reject contradictory objectives before touching phase, id or revision.
 fn triple_spec_ok(_ r:TripleLimits,_ market:u256,_ maximum:u256,_ buffer_min:u256) -> bool {
     if market >= 3 || maximum > INPUT_CEILING { return false }
     if r.buffer_mode == 0 {
-        buffer_min <= r.total && buffer_min >= r.reserve_floor
+        if buffer_min > r.total || buffer_min < r.reserve_floor { return false }
     } else {
-        buffer_min <= r.cap_z && buffer_min >= r.min_z
+        if buffer_min > r.cap_z || buffer_min < r.min_z { return false }
     }
+    var y = r.min_y
+    if r.ratio_x_y == 0 {
+        if r.min_x != 0 { return false }
+    } else {
+        let needed = (r.min_x + r.ratio_x_y - 1) / r.ratio_x_y
+        if needed > y { y = needed }
+    }
+    var z = r.min_z
+    if r.buffer_mode == 1 && buffer_min > z { z = buffer_min }
+    let witness = TripleDraft {x:r.min_x,y,z}
+    triple_permanent_mask(witness,r) == 0
+        && triple_at(witness,market) <= maximum
+        && triple_buffer(witness,r) >= buffer_min
 }
 
 fn triple_deficits(_ d:TripleDraft,_ r:TripleLimits,_ i:TripleIncident) -> (u256,u256) {
