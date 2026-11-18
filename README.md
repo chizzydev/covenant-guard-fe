@@ -2,6 +2,10 @@
 
 **Safety rules that survive the emergency.**
 
+**Watch:** [Completed narrated demonstration](https://youtu.be/K7QKD6obiwM)
+
+**Explore:** [Run locally](#run-it-locally) · [Try the incident in two minutes](#a-two-minute-incident-walkthrough) · [Why Fe](#why-fe-is-essential-here) · [Examine the evidence](#reproduce-the-evidence) · [Source map](#where-the-code-lives) · [Limitations](#scope-and-trust-boundaries)
+
 A smart contract can reject an invalid transaction and still fail when it matters most: an emergency has been declared, but an otherwise valid update makes the situation worse. **Covenant Guard gives that emergency a persistent, contract-enforced obligation.** Until the obligation is satisfied, every protected transition must obey both the permanent rules and the recovery rules.
 
 The core is **`covenant_transition::Guard3`**, a reusable [Fe 26.5.0](https://fe-lang.org/) ingot. A capital-allocation contract and a governance-registry contract import the **same private safety kernel**, configure different policies, and execute its checks in real compiled Fe bytecode on disposable local EVMs. A browser application makes the result visible; a Python oracle, signed EVM tests, compiled mutants and GitHub Actions make it reproducible.
@@ -10,20 +14,26 @@ The core is **`covenant_transition::Guard3`**, a reusable [Fe 26.5.0](https://fe
 
 ![Covenant Guard: contract-enforced protected state, incident lifecycle and guarded controls](docs/images/covenant-guard-workspace.png)
 
-**Explore:** [Run locally](#run-it-locally) · [Try the incident in two minutes](#a-two-minute-incident-walkthrough) · [Why Fe](#why-fe-is-essential-here) · [Examine the evidence](#reproduce-the-evidence) · [Source map](#where-the-code-lives) · [Limitations](#scope-and-trust-boundaries)
-
 **Release:** [`v0.1.0`](https://github.com/chizzydev/covenant-guard-fe/tree/v0.1.0) · **Frozen engineering commit:** [`1c05d8b`](https://github.com/chizzydev/covenant-guard-fe/commit/1c05d8b377777d462da8d7bdf7b7c5aac046346c) · **[Passing GitHub Actions evidence](https://github.com/chizzydev/covenant-guard-fe/actions/runs/42501254634)** · Fe Builders Challenge 2026, project **FE-034**.
 
 ## The important part in 30 seconds
+
+An emergency has been declared. An operator tries to make the situation worse. The proposed transaction may satisfy the ordinary contract limits, but it violates the emergency recovery obligation. **The compiled Fe smart contract rejects it.**
+
+Three outcomes are visible in the demonstration:
+
+- **Safe recovery transaction:** accepted.
+- **Recovery-regressing transaction:** rejected without changing protected state.
+- **Completed recovery:** the incident is **CONTAINED** and eligible for guardian release.
 
 Imagine a capital allocator with **1,000 units** of capacity. Initially, it holds 400 in Core, 300 in Supporting and 100 in Satellite; the remaining **200** is the emergency buffer.
 
 A guardian detects an incident and installs two simultaneous requirements: **Core must be at most 200**, and **unused capacity must be at least 300**. The existing allocation now has two measurable deficits:
 
-- **Exposure deficit:** `400 − 200 = 200`.
-- **Buffer deficit:** `300 − 200 = 100`.
+- **Exposure deficit** (how far Core exceeds the incident ceiling): `400 − 200 = 200`.
+- **Buffer deficit** (how much unused capacity is missing from the required buffer): `300 − 200 = 100`.
 
-Covenant Guard permits a recovery step only if **neither deficit grows and at least one shrinks**. Reaching zero on both transitions the incident to **CONTAINED**. Only the guardian can release that exact incident, using the current revision and stored incident ID.
+Covenant Guard permits a recovery step only if **neither deficit grows and at least one shrinks**. Reaching zero on both transitions the incident to **CONTAINED**. Only the guardian can release that exact incident, using the current **revision** (the protected state's version number) and stored **incident ID** (the identifier assigned when the incident was activated).
 
 | Action on the real local Fe/EVM contract | Protected state (Core / Supporting / Satellite) | Deficits (exposure, buffer) | Outcome |
 | --- | --- | --- | --- |
@@ -124,16 +134,21 @@ Stop the server with **Ctrl+C**. `PORT=4551 npm start` (Bash) or `$env:PORT='455
 
 Start from a fresh application session. Open **Guard workspace → Allocation**:
 
+Use **Demo transaction caller** to choose the role: **Guardian** manages incidents; **Operator** changes protected state. This selects a disposable local signer, not a user login. **Progressive protection** stores the emergency requirements without changing the current allocation, allowing recovery over subsequent transactions.
+
+**Preview using Fe** checks a proposal without submitting it. **Commit change** submits a signed transaction to the local EVM. Its **receipt** is the execution record, not a public-chain confirmation.
+
 | Step | Do this | What to watch |
 | --- | --- | --- |
 | **1. Inspect** | Start in Allocation with the Operator selected. Read the `400 / 300 / 100` protected state and revision 1. | No active incident. The evidence inspector correctly says **read-only state**, not “transaction submitted.” |
-| **2. Declare the incident** | Choose **Guardian**, keep **Core** selected, enter exposure ceiling **200** and required buffer **300**, then choose **Activate progressive**. | A stored **RECOVERING** incident appears. Exposure and buffer deficits become **(200, 100)**. |
-| **3. Recover safely** | Switch to **Operator**, set Core/Supporting/Satellite to **300 / 300 / 100**, preview and commit. | Fe accepts; the deficits improve to **(100, 0)**. The transaction's before/after values and receipt are available in **Execution evidence**. |
-| **4. Try a shortcut** | Try **350 / 300 / 100**, then commit. | The Fe EVM rejects the worsening transition. The state and revision do not change. |
-| **5. Finish containment** | Set **200 / 300 / 100** and commit. | Both deficits reach zero and the stored phase changes to **CONTAINED**. |
+| **2. Declare the incident** | Choose **Guardian**. Under **Protected field**, keep **0 · X** (Core market); set **Exposure ceiling** to **200** and **Required buffer** to **300**, then click **Activate progressive**. | A stored **RECOVERING** incident appears. Exposure and buffer deficits become **(200, 100)**. |
+| **3. Recover safely** | Switch to **Operator**. Set **Core market / Supporting / Satellite** to **300 / 300 / 100**. Click **Preview using Fe**, then **Commit change**. | Fe accepts; the deficits improve to **(100, 0)**. The transaction's before/after values and receipt are available in **Execution evidence**. |
+| **4. Try a shortcut** | Set **Core market / Supporting / Satellite** to **350 / 300 / 100**, then click **Commit change**. Submit the transaction rather than stopping at the read-only preview. | The Fe EVM rejects the worsening transition. The state and revision do not change. |
+| **5. Finish containment** | Set **Core market / Supporting / Satellite** to **200 / 300 / 100** and click **Commit change**. | Both deficits reach zero and the stored phase changes to **CONTAINED**. |
 | **6. Release** | Select **Guardian** and choose **Release current incident by exact ID**. | The matching incident is released; permanent safety rules still apply. |
+| **7. Inspect the execution** | In **Execution evidence**, choose **Before / after**, **Receipt** or **Raw response**; use **Copy JSON** for the complete response. | Compare protected values and revisions for accepted and rejected transactions, and inspect their actual local EVM receipts. |
 
-**Try the second consumer:** switch to **Governance**, where the initial state is quorum **5**, membership **9**, delay **2**. A guardian objective of quorum ceiling **0** is rejected because the permanent minimum quorum is **1**; a feasible objective of quorum ceiling **2** and delay minimum **7** can be recovered toward `(2, 9, 7)` and then released. That shows real reuse, not a renamed allocation screen.
+**Try the second consumer:** switch to **Governance**, where the initial state is quorum **5**, membership **9**, delay **2**. A guardian objective of quorum ceiling **0** is rejected because the permanent minimum quorum is **1**; a feasible objective of quorum ceiling **2** and delay minimum **7** can be recovered toward `(2, 9, 7)` and then released. Both contracts import the same reusable **`covenant_transition::Guard3`** Fe safety kernel. That shows real reuse, not a renamed allocation screen.
 
 ### Evidence you can actually inspect
 
